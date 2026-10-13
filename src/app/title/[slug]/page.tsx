@@ -166,7 +166,21 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
   const guard = (info: TierInfo): TierInfo =>
     canSee(lens, info.spoilerLevel)
       ? info
-      : { ...info, summary: "", whyItClicks: "", startHere: "", prerequisites: [], deepDive: "" };
+      : {
+          ...info,
+          summary: "",
+          whyItClicks: "",
+          startHere: "",
+          prerequisites: [],
+          deepDive: "",
+          reasonsToWatch: [],
+          targetAudience: "",
+          characterFocus: "",
+          pacingNotes: "",
+          thematicThesis: "",
+          sakugaAndPaneling: "",
+          uncensoredLore: "",
+        };
   const guardedTiers: TitleTiers = {
     beginner: guard(title.tiers.beginner),
     mediocre: guard(title.tiers.mediocre),
@@ -320,6 +334,69 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
             <h2 className="display mt-3 text-3xl text-paper">Synopsis</h2>
             <p className="mt-5 text-[15px] leading-relaxed text-dim">{title.synopsis}</p>
 
+            {/* Lens-Aware Perspective Snapshot Banner */}
+            {lens.level === "beginner" ? (
+              <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 sm:p-5">
+                <div className="mono mb-1.5 flex items-center gap-2 text-[9px] uppercase tracking-wider text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Beginner Conviction · Why You Should Watch This</span>
+                </div>
+                <h4 className="display text-base font-bold text-paper">
+                  {guardedTiers.beginner.summary || "High-octane narrative that grips you right from episode 1."}
+                </h4>
+                <p className="mt-1.5 text-xs leading-relaxed text-dim">
+                  {guardedTiers.beginner.whyItClicks}
+                </p>
+                <div className="mono mt-3 flex flex-wrap items-center gap-2 text-[9px] text-emerald-300">
+                  <span>✓ 100% spoiler-safe</span>
+                  <span>·</span>
+                  <span>✓ Zero lore homework needed</span>
+                  <span>·</span>
+                  <span>✓ High bingeability</span>
+                </div>
+              </div>
+            ) : lens.level === "mediocre" ? (
+              <div className="mt-6 rounded-xl border border-sky-500/30 bg-sky-500/5 p-4 sm:p-5">
+                <div className="mono mb-1.5 flex items-center gap-2 text-[9px] uppercase tracking-wider text-sky-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+                  <span>Mediocre Briefing · Character Dynamics & Adaptation Pacing</span>
+                </div>
+                <h4 className="display text-base font-bold text-paper">
+                  {guardedTiers.mediocre.summary || "Strong cast chemistry, high stakes, and consistent adaptation quality."}
+                </h4>
+                <p className="mt-1.5 text-xs leading-relaxed text-dim">
+                  {guardedTiers.mediocre.whyItClicks}
+                </p>
+                <div className="mono mt-3 flex flex-wrap items-center gap-2 text-[9px] text-sky-300">
+                  <span>🎭 Layered ensemble cast</span>
+                  <span>·</span>
+                  <span>⏱️ Solid middle-arc momentum</span>
+                  <span>·</span>
+                  <span>👁️ Mild discussion spoilers</span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 sm:p-5">
+                <div className="mono mb-1.5 flex items-center gap-2 text-[9px] uppercase tracking-wider text-amber-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span>Elite Deconstruction · Authorial Intent & Lore Subtext</span>
+                </div>
+                <h4 className="display text-base font-bold text-paper">
+                  {guardedTiers.elite.summary || "Philosophical deconstruction and uncompromising narrative consequences."}
+                </h4>
+                <p className="mt-1.5 text-xs leading-relaxed text-dim">
+                  {guardedTiers.elite.whyItClicks}
+                </p>
+                <div className="mono mt-3 flex flex-wrap items-center gap-2 text-[9px] text-amber-300">
+                  <span>📐 Paneling & sakuga direction</span>
+                  <span>·</span>
+                  <span>🔬 Thematic deconstruction</span>
+                  <span>·</span>
+                  <span>⚠️ Uncensored lore & ending open</span>
+                </div>
+              </div>
+            )}
+
             <div className="mt-7 flex flex-wrap gap-2">
               {title.themes.map((theme) => (
                 <span
@@ -353,7 +430,14 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
           <section>
             <div className="mono text-[9px] text-mute">panel 03 — audience guides</div>
             <h2 className="display mb-5 mt-3 text-3xl text-paper">Beginner · Mediocre · Elite</h2>
-            <TierPanels tiers={guardedTiers} lens={lens} />
+            <TierPanels
+              tiers={guardedTiers}
+              lens={lens}
+              titleName={title.name}
+              format={title.format}
+              genres={title.genres}
+              synopsis={title.synopsis}
+            />
           </section>
 
           {/* community */}

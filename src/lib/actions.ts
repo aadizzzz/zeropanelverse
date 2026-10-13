@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  directMessages,
+  follows,
   panelVotes,
   panels,
   streamWaitlist,
@@ -338,4 +340,89 @@ export async function joinWaitlistAction(_prev: ActionState, form: FormData): Pr
     ok: true,
     message: `You are on the list — ${countRows[0]?.count ?? 1} viewers waiting for launch.`,
   };
+}
+
+/* ----------------------------- social / follow ---------------------------- */
+
+export async function followUserAction(
+  targetUserId: number,
+): Promise<{ ok: boolean; following: boolean; count?: number; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, following: false, error: "Sign in to follow other panelists." };
+  if (user.id === targetUserId) {
+    return { ok: false, following: false, error: "You cannot follow yourself." };
+  }
+
+  const existing = await db
+    .select({ id: follows.id })
+    .from(follows)
+    .where(and(eq(follows.followerId, user.id), eq(follows.followingId, targetUserId)))
+    .limit(1);
+
+  let following = false;
+  if (existing.length > 0) {
+    await db.delete(follows).where(eq(follows.id, existing[0].id));
+    following = false;
+  } else {
+    await db.insert(follows).values({ followerId: user.id, followingId: targetUserId });
+    following = true;
+  }
+
+  const countRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(follows)
+    .where(eq(follows.followingId, targetUserId));
+
+  revalidatePath(`/u/[username]`, "page");
+  return { ok: true, following, count: countRows[0]?.count ?? 0 };
+}
+
+/* ----------------------------- messenger / chat ---------------------------- */
+
+export async function sendMessageAction(
+  receiverId: number,
+  content: string,
+  titleSlug?: string,
+): Promise<{ ok: boolean; messageId?: number; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Sign in to send direct messages." };
+  if (user.id === receiverId) return { ok: false, error: "You cannot message yourself." };
+
+  const trimmed = content.trim();
+  if (!trimmed && !titleSlug) {
+    return { ok: false, error: "Message cannot be empty." };
+  }
+
+  const result = await db
+    .insert(directMessages)
+    .values({
+      senderId: user.id,
+      receiverId,
+      content: trimmed,
+      titleSlug: titleSlug || null,
+      read: false,
+    })
+    .returning({ id: directMessages.id });
+
+  return { ok: true, messageId: result[0]?.id };
+}
+
+export async function markMessagesReadAction(
+  partnerId: number,
+): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+
+  await db
+    .update(directMessages)
+    .set({ read: true })
+    .where(
+      and(
+        eq(directMessages.senderId, partnerId),
+        eq(directMessages.receiverId, user.id),
+        eq(directMessages.read, false),
+      ),
+    );
+
+  return { ok: true };
 }

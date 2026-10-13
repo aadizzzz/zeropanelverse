@@ -39,6 +39,20 @@ export type TierInfo = {
   startHere: string;
   prerequisites: string[];
   deepDive: string;
+  /** Beginner mode: Compelling reasons to watch/read */
+  reasonsToWatch?: string[];
+  /** Beginner mode: Who this anime is perfect for */
+  targetAudience?: string;
+  /** Mediocre mode: Detailed character dynamics and relationships */
+  characterFocus?: string;
+  /** Mediocre mode: Arc pacing and narrative flow */
+  pacingNotes?: string;
+  /** Elite mode: Philosophical thesis, subtext and deconstruction */
+  thematicThesis?: string;
+  /** Elite mode: Sakuga, panel composition, animation direction */
+  sakugaAndPaneling?: string;
+  /** Elite mode: Uncensored lore and climax breakdown (spoilers open) */
+  uncensoredLore?: string;
 };
 
 export type TitleTiers = {
@@ -208,7 +222,38 @@ export const streamWaitlist = pgTable("stream_waitlist", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const follows = pgTable(
+  "follows",
+  {
+    id: serial("id").primaryKey(),
+    followerId: integer("follower_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    followingId: integer("following_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [unique("follows_unique").on(table.followerId, table.followingId)],
+);
+
+export const directMessages = pgTable("direct_messages", {
+  id: serial("id").primaryKey(),
+  senderId: integer("sender_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  receiverId: integer("receiver_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  titleSlug: varchar("title_slug", { length: 120 }),
+  read: boolean("read").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type TitleRow = typeof titles.$inferSelect;
 export type PanelRow = typeof panels.$inferSelect;
 export type TitleNodeRow = typeof titleNodes.$inferSelect;
+export type FollowRow = typeof follows.$inferSelect;
+export type DirectMessageRow = typeof directMessages.$inferSelect;

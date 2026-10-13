@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/library", label: "Library" },
   { href: "/timeline", label: "Timeline" },
   { href: "/panels", label: "Panels" },
+  { href: "/messages", label: "Messages" },
   { href: "/streaming", label: "Streaming" },
 ];
 

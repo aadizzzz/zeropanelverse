@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { panels, titleNodes, titles, users } from "@/db/schema";
+import { directMessages, follows, panels, titleNodes, titles, users } from "@/db/schema";
 import { seedPanels, seedTitles } from "@/lib/seed-data";
 import { seedNodes, seedOpenPanels } from "@/lib/seed-franchise";
 import { hashPassword } from "@/lib/auth";
@@ -130,9 +130,96 @@ async function seedFranchise(): Promise<void> {
   }
 }
 
+/** v3: social graph (follows) and initial direct messages between demo users. */
+async function seedSocial(): Promise<void> {
+  const userRows = await db.select({ id: users.id, username: users.username }).from(users);
+  const userMap = new Map(userRows.map((row) => [row.username, row.id]));
+
+  const newbieId = userMap.get("panelnewbie");
+  const miraId = userMap.get("midwatch_mira");
+  const archivistId = userMap.get("archivist_k");
+
+  if (!newbieId || !miraId || !archivistId) return;
+
+  // 1. Follows
+  const followCount = await db.select({ count: sql<number>`count(*)::int` }).from(follows);
+  if ((followCount[0]?.count ?? 0) === 0) {
+    await db
+      .insert(follows)
+      .values([
+        { followerId: newbieId, followingId: miraId },
+        { followerId: newbieId, followingId: archivistId },
+        { followerId: miraId, followingId: newbieId },
+        { followerId: miraId, followingId: archivistId },
+        { followerId: archivistId, followingId: miraId },
+      ])
+      .onConflictDoNothing();
+  }
+
+  // 2. Direct Messages (Instagram-style chat history)
+  const messageCount = await db.select({ count: sql<number>`count(*)::int` }).from(directMessages);
+  if ((messageCount[0]?.count ?? 0) === 0) {
+    const now = Date.now();
+    await db
+      .insert(directMessages)
+      .values([
+        {
+          senderId: miraId,
+          receiverId: newbieId,
+          content: "Hey Rin! Welcome to ZeroPanelVerse. If you're looking for your next show, definitely check out Attack on Titan or Vinland Saga first.",
+          titleSlug: "attack-on-titan",
+          read: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 3), // 3 hours ago
+        },
+        {
+          senderId: newbieId,
+          receiverId: miraId,
+          content: "Thanks Mira! Just started AoT episode 1 yesterday, that opening wall breach had me completely speechless haha",
+          titleSlug: null,
+          read: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 2), // 2 hours ago
+        },
+        {
+          senderId: miraId,
+          receiverId: newbieId,
+          content: "Right?? Just wait till episode 5! Keep your beginner lens turned on so you dodge the colossal spoiler landmines in the open lounge.",
+          titleSlug: null,
+          read: false,
+          createdAt: new Date(now - 1000 * 60 * 25), // 25 min ago
+        },
+        {
+          senderId: archivistId,
+          receiverId: miraId,
+          content: "Mira, have you checked the season 4 animation director shifts? The line weight divergence and rotational 3DMG cuts in the Shiganshina raid are worth analyzing.",
+          titleSlug: "attack-on-titan",
+          read: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 5),
+        },
+        {
+          senderId: miraId,
+          receiverId: archivistId,
+          content: "Yeah, the CG gear sequences feel noticeably heavier, but the facial framing and charcoal hatching in the trench scene was exceptional.",
+          titleSlug: null,
+          read: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 4),
+        },
+        {
+          senderId: archivistId,
+          receiverId: newbieId,
+          content: "Welcome to the archive, Rin. Whenever you finish a title and want to look at the manga paneling techniques or authorial intent, feel free to drop a message.",
+          titleSlug: null,
+          read: false,
+          createdAt: new Date(now - 1000 * 60 * 45), // 45 min ago
+        },
+      ])
+      .onConflictDoNothing();
+  }
+}
+
 async function runSeed(): Promise<void> {
   await seedBase();
   await seedFranchise();
+  await seedSocial();
 }
 
 export function ensureSeeded(): Promise<void> {

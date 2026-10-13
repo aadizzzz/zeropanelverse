@@ -34,6 +34,13 @@ export function Nav({ user }: { user: SessionUser | null }) {
           {user ? (
             <div className="flex items-center gap-2">
               <Link
+                href="/messages"
+                title="Direct Messages"
+                className="flex h-9 w-9 items-center justify-center border border-line text-xs text-dim transition-colors hover:border-paper hover:text-paper"
+              >
+                ✈️
+              </Link>
+              <Link
                 href="/profile"
                 className="flex items-center gap-2 border border-line px-2.5 py-1.5 transition-colors hover:border-paper"
               >
