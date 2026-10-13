@@ -28,37 +28,57 @@ const LEVELS = [
   },
 ];
 
-export default async function HomePage() {
-  await ensureSeeded();
+import { seedTitles } from "@/lib/seed-data";
 
-  const [featured, counts, latestPanels, watchlistCount, panelCount] = await Promise.all([
-    db.select().from(titles).orderBy(desc(titles.popularity)).limit(8),
-    db
-      .select({ format: titles.format, count: sql<number>`count(*)::int` })
-      .from(titles)
-      .groupBy(titles.format),
-    db
-      .select({
-        id: panels.id,
-        headline: panels.headline,
-        body: panels.body,
-        kind: panels.kind,
-        authorLevel: panels.authorLevel,
-        createdAt: panels.createdAt,
-        slug: titles.slug,
-        titleName: titles.name,
-        accent: titles.accent,
-        authorName: users.displayName,
-        authorUsername: users.username,
-      })
-      .from(panels)
-      .innerJoin(titles, eq(titles.id, panels.titleId))
-      .innerJoin(users, eq(users.id, panels.userId))
-      .orderBy(desc(panels.createdAt))
-      .limit(3),
-    db.select({ count: sql<number>`count(*)::int` }).from(watchlist),
-    db.select({ count: sql<number>`count(*)::int` }).from(panels),
-  ]);
+export default async function HomePage() {
+  let featured: any[] = [];
+  let counts: { format: string; count: number }[] = [];
+  let latestPanels: any[] = [];
+  let watchlistCount: { count: number }[] = [{ count: 0 }];
+  let panelCount: { count: number }[] = [{ count: 0 }];
+  let isDbConnected = true;
+
+  try {
+    await ensureSeeded();
+    const res = await Promise.all([
+      db.select().from(titles).orderBy(desc(titles.popularity)).limit(8),
+      db
+        .select({ format: titles.format, count: sql<number>`count(*)::int` })
+        .from(titles)
+        .groupBy(titles.format),
+      db
+        .select({
+          id: panels.id,
+          headline: panels.headline,
+          body: panels.body,
+          kind: panels.kind,
+          authorLevel: panels.authorLevel,
+          createdAt: panels.createdAt,
+          slug: titles.slug,
+          titleName: titles.name,
+          accent: titles.accent,
+          authorName: users.displayName,
+          authorUsername: users.username,
+        })
+        .from(panels)
+        .innerJoin(titles, eq(titles.id, panels.titleId))
+        .innerJoin(users, eq(users.id, panels.userId))
+        .orderBy(desc(panels.createdAt))
+        .limit(3),
+      db.select({ count: sql<number>`count(*)::int` }).from(watchlist),
+      db.select({ count: sql<number>`count(*)::int` }).from(panels),
+    ]);
+    [featured, counts, latestPanels, watchlistCount, panelCount] = res;
+  } catch (err) {
+    isDbConnected = false;
+    // Fallback to static seed data so the homepage ALWAYS loads cleanly even before DB connection!
+    featured = seedTitles.slice(0, 8);
+    counts = [
+      { format: "anime", count: seedTitles.filter((t) => t.format === "anime").length },
+      { format: "manga", count: seedTitles.filter((t) => t.format === "manga").length },
+      { format: "manhwa", count: seedTitles.filter((t) => t.format === "manhwa").length },
+    ];
+  }
 
   const formatCount = (key: string) =>
     counts.find((row) => row.format === key)?.count ?? 0;
@@ -67,6 +87,11 @@ export default async function HomePage() {
 
   return (
     <div>
+      {!isDbConnected && (
+        <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-300">
+          <span className="font-semibold">⚡ Demo Archive Mode:</span> Real-time database is not connected. Add your <code className="bg-black/40 px-1.5 py-0.5 rounded text-paper">DATABASE_URL</code> to Vercel Environment Variables to activate live community panels and Messenger.
+        </div>
+      )}
       {/* ---------------- hero ---------------- */}
       <section className="relative overflow-hidden border-b border-line">
         <div

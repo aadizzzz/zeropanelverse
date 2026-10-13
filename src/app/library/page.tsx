@@ -73,14 +73,26 @@ export default async function LibraryPage({
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [rows, allGenres] = await Promise.all([
-    db.select().from(titles).where(where).orderBy(orderBy),
-    db.select({ genres: titles.genres }).from(titles),
-  ]);
+  let rows: any[] = [];
+  let genres: string[] = [];
 
-  const genres = [...new Set(allGenres.flatMap((row) => row.genres))].sort((a, b) =>
-    a.localeCompare(b),
-  );
+  try {
+    const [dbRows, allGenres] = await Promise.all([
+      db.select().from(titles).where(where).orderBy(orderBy),
+      db.select({ genres: titles.genres }).from(titles),
+    ]);
+    rows = dbRows;
+    genres = [...new Set(allGenres.flatMap((row) => row.genres))].sort((a, b) =>
+      a.localeCompare(b),
+    );
+  } catch {
+    // Fallback to static seed data
+    const { seedTitles } = await import("@/lib/seed-data");
+    rows = seedTitles;
+    genres = [...new Set(seedTitles.flatMap((row) => row.genres))].sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
