@@ -11,10 +11,16 @@ const globalForDb = globalThis as typeof globalThis & {
   __arenaNextJsPostgresqlPool?: Pool;
 };
 
+const isCloudDb =
+  databaseUrl.includes("supabase.co") ||
+  databaseUrl.includes("pooler.supabase.com") ||
+  databaseUrl.includes("sslmode=require");
+
 export const pool =
   globalForDb.__arenaNextJsPostgresqlPool ??
   new Pool({
     connectionString: databaseUrl,
+    ssl: isCloudDb ? { rejectUnauthorized: false } : undefined,
   });
 
 if (process.env.NODE_ENV !== "production") {
