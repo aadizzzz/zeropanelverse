@@ -34,8 +34,8 @@ export function LensBar({ lens, signedIn }: { lens: Lens; signedIn: boolean }) {
 
   return (
     <div className={`border-b border-line bg-ink-soft transition-opacity ${pending ? "opacity-60" : ""}`}>
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2 sm:px-6">
-        <span className="mono text-[9px] text-mute">Reading lens</span>
+      <div className="mx-auto flex max-w-7xl items-center gap-x-4 gap-y-2 px-4 py-2 sm:gap-x-5 sm:px-6 overflow-x-auto scrollbar-none whitespace-nowrap">
+        <span className="mono shrink-0 text-[9px] text-mute">Reading lens</span>
 
         <div role="group" aria-label="Audience level" className="flex">
           {LEVELS.map((level) => {
@@ -58,15 +58,15 @@ export function LensBar({ lens, signedIn }: { lens: Lens; signedIn: boolean }) {
           })}
         </div>
 
-        <span className="hidden h-4 w-px bg-line sm:block" />
-        <span className="mono text-[9px] text-mute">Spoilers</span>
+        <span className="h-4 w-px bg-line shrink-0" />
+        <span className="mono shrink-0 text-[9px] text-mute">Spoilers</span>
 
         {lens.level === "elite" ? (
-          <span className="mono border border-paper/50 px-3 py-1.5 text-[9px] text-paper">
+          <span className="mono shrink-0 border border-paper/50 px-3 py-1.5 text-[9px] text-paper">
             Open · no boundaries
           </span>
         ) : (
-          <div role="group" aria-label="Spoiler mode" className="flex">
+          <div role="group" aria-label="Spoiler mode" className="flex shrink-0">
             {SPOILER_MODES.map((mode) => {
               const allowed = modes.includes(mode);
               const on = lens.spoilers === mode;

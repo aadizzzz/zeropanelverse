@@ -14,6 +14,10 @@ type PanelEntry = {
   slug: string;
   titleName: string;
   accent: string;
+  accentSoft?: string;
+  glyph?: string;
+  format?: string;
+  year?: number;
 };
 
 type WatchlistItem = {
@@ -23,6 +27,8 @@ type WatchlistItem = {
   glyph: string;
   format: string;
   status: string;
+  accentSoft?: string;
+  year?: number;
 };
 
 type FollowerUser = {
@@ -48,14 +54,14 @@ export function ProfileFeedTabs({
 
   return (
     <div>
-      {/* Tabs Bar */}
-      <div className="flex border-b border-line">
+      {/* Tabs Bar with smooth horizontal scrolling on mobile */}
+      <div className="flex border-b border-line overflow-x-auto scrollbar-none whitespace-nowrap gap-1 sm:gap-2 px-1">
         <button
           type="button"
           onClick={() => setActiveTab("posts")}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-medium transition-colors ${
+          className={`inline-flex shrink-0 items-center gap-1.5 sm:gap-2 border-b-2 px-3.5 sm:px-5 py-2.5 sm:py-3 text-[11px] sm:text-xs font-medium transition-colors ${
             activeTab === "posts"
-              ? "border-paper text-paper"
+              ? "border-paper text-paper font-semibold"
               : "border-transparent text-dim hover:text-paper"
           }`}
         >
@@ -68,9 +74,9 @@ export function ProfileFeedTabs({
         <button
           type="button"
           onClick={() => setActiveTab("watchlist")}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-medium transition-colors ${
+          className={`inline-flex shrink-0 items-center gap-1.5 sm:gap-2 border-b-2 px-3.5 sm:px-5 py-2.5 sm:py-3 text-[11px] sm:text-xs font-medium transition-colors ${
             activeTab === "watchlist"
-              ? "border-paper text-paper"
+              ? "border-paper text-paper font-semibold"
               : "border-transparent text-dim hover:text-paper"
           }`}
         >
@@ -83,9 +89,9 @@ export function ProfileFeedTabs({
         <button
           type="button"
           onClick={() => setActiveTab("followers")}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-medium transition-colors ${
+          className={`inline-flex shrink-0 items-center gap-1.5 sm:gap-2 border-b-2 px-3.5 sm:px-5 py-2.5 sm:py-3 text-[11px] sm:text-xs font-medium transition-colors ${
             activeTab === "followers"
-              ? "border-paper text-paper"
+              ? "border-paper text-paper font-semibold"
               : "border-transparent text-dim hover:text-paper"
           }`}
         >
@@ -98,9 +104,9 @@ export function ProfileFeedTabs({
         <button
           type="button"
           onClick={() => setActiveTab("following")}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-medium transition-colors ${
+          className={`inline-flex shrink-0 items-center gap-1.5 sm:gap-2 border-b-2 px-3.5 sm:px-5 py-2.5 sm:py-3 text-[11px] sm:text-xs font-medium transition-colors ${
             activeTab === "following"
-              ? "border-paper text-paper"
+              ? "border-paper text-paper font-semibold"
               : "border-transparent text-dim hover:text-paper"
           }`}
         >
@@ -117,14 +123,14 @@ export function ProfileFeedTabs({
         {activeTab === "posts" && (
           <div className="flex flex-col gap-4">
             {entries.length === 0 ? (
-              <div className="panel p-12 text-center">
+              <div className="panel p-8 sm:p-12 text-center">
                 <p className="text-sm text-dim">This panelist has not published any entries yet.</p>
               </div>
             ) : (
               entries.map((entry) => (
                 <article
                   key={entry.id}
-                  className="panel panel-hover p-6"
+                  className="panel panel-hover p-4 sm:p-6"
                   style={{ ["--accent" as string]: entry.accent }}
                 >
                   <div className="mono flex flex-wrap items-center gap-2 text-[9px] text-mute">
@@ -139,20 +145,43 @@ export function ProfileFeedTabs({
                     </span>
                   </div>
 
-                  <h3 className="display mt-3 text-xl leading-tight text-paper">
+                  <h3 className="display mt-3 text-lg sm:text-xl leading-tight text-paper">
                     {entry.headline}
                   </h3>
-                  <p className="mt-2.5 text-[13.5px] leading-relaxed text-dim whitespace-pre-wrap">
+                  <p className="mt-2.5 text-[13px] sm:text-[13.5px] leading-relaxed text-dim whitespace-pre-wrap">
                     {entry.body}
                   </p>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
+                  {/* Anime Poster Card attached to review */}
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3">
                     <Link
                       href={`/title/${entry.slug}`}
-                      className="mono inline-flex items-center gap-1.5 text-[10px] font-medium accent-text hover:underline"
+                      className="group/link flex items-center gap-3 rounded-lg border border-line bg-black/40 p-2 pr-3.5 transition-colors hover:border-paper hover:bg-black/60"
                     >
-                      <span>Anime: {entry.titleName}</span>
-                      <span>→</span>
+                      <span
+                        className="display grid h-9 w-9 shrink-0 place-items-center rounded border text-sm font-bold shadow-sm"
+                        style={{
+                          borderColor: entry.accent || "var(--color-line)",
+                          color: entry.accent || "#fff",
+                        }}
+                      >
+                        {entry.glyph || entry.titleName.charAt(0)}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="display block text-xs text-paper group-hover/link:underline truncate max-w-[200px] sm:max-w-xs">
+                          {entry.titleName}
+                        </span>
+                        <span className="mono text-[8px] uppercase text-mute">
+                          {entry.format || "Anime"} {entry.year ? `· ${entry.year}` : ""}
+                        </span>
+                      </div>
+                    </Link>
+
+                    <Link
+                      href={`/title/${entry.slug}`}
+                      className="mono text-[10px] text-paper hover:underline"
+                    >
+                      Open Guide →
                     </Link>
                   </div>
                 </article>
@@ -165,7 +194,7 @@ export function ProfileFeedTabs({
         {activeTab === "watchlist" && (
           <div className="grid gap-3 sm:grid-cols-2">
             {watchlistItems.length === 0 ? (
-              <div className="panel col-span-2 p-12 text-center text-sm text-dim">
+              <div className="panel col-span-2 p-8 sm:p-12 text-center text-sm text-dim">
                 No titles in watchlist yet.
               </div>
             ) : (
@@ -173,11 +202,11 @@ export function ProfileFeedTabs({
                 <Link
                   key={`${item.slug}-${item.status}`}
                   href={`/title/${item.slug}`}
-                  className="panel panel-hover flex items-center gap-3.5 p-4"
+                  className="panel panel-hover flex items-center gap-3.5 p-3.5 sm:p-4"
                 >
                   <span
-                    className="display grid h-12 w-12 place-items-center rounded border border-line bg-black/40 text-xl font-bold"
-                    style={{ color: item.accent }}
+                    className="display grid h-12 w-12 shrink-0 place-items-center rounded border border-line bg-black/40 text-xl font-bold shadow"
+                    style={{ borderColor: item.accent, color: item.accent }}
                   >
                     {item.glyph}
                   </span>
@@ -185,6 +214,12 @@ export function ProfileFeedTabs({
                     <h4 className="truncate text-sm font-semibold text-paper">{item.name}</h4>
                     <div className="mono mt-1 flex items-center gap-2 text-[9px] text-mute">
                       <span className="uppercase">{item.format}</span>
+                      {item.year ? (
+                        <>
+                          <span>·</span>
+                          <span>{item.year}</span>
+                        </>
+                      ) : null}
                       <span>·</span>
                       <span className="capitalize text-dim">{item.status}</span>
                     </div>
@@ -200,20 +235,20 @@ export function ProfileFeedTabs({
         {activeTab === "followers" && (
           <div className="space-y-3">
             {followers.length === 0 ? (
-              <div className="panel p-12 text-center text-sm text-dim">
+              <div className="panel p-8 sm:p-12 text-center text-sm text-dim">
                 No followers yet. Be the first to follow!
               </div>
             ) : (
               followers.map((u) => (
                 <div
                   key={u.id}
-                  className="panel flex items-center justify-between p-4 transition-colors hover:border-paper/40"
+                  className="panel flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 transition-colors hover:border-paper/40"
                 >
                   <Link
                     href={`/u/${u.username}`}
                     className="flex items-center gap-3 hover:opacity-85"
                   >
-                    <span className="display grid h-10 w-10 place-items-center rounded-full border border-line bg-black/60 text-sm font-bold text-paper">
+                    <span className="display grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line bg-black/60 text-sm font-bold text-paper">
                       {u.avatarGlyph}
                     </span>
                     <div>
@@ -227,7 +262,7 @@ export function ProfileFeedTabs({
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/messages?with=${u.username}`}
-                      className="mono rounded border border-line px-3 py-1.5 text-[10px] text-paper hover:border-paper hover:bg-white/5"
+                      className="mono rounded border border-line bg-white/5 px-3 py-1.5 text-[10px] text-paper hover:border-paper hover:bg-white/10"
                     >
                       Message ✈️
                     </Link>
@@ -248,20 +283,20 @@ export function ProfileFeedTabs({
         {activeTab === "following" && (
           <div className="space-y-3">
             {following.length === 0 ? (
-              <div className="panel p-12 text-center text-sm text-dim">
+              <div className="panel p-8 sm:p-12 text-center text-sm text-dim">
                 Not following any panelists yet.
               </div>
             ) : (
               following.map((u) => (
                 <div
                   key={u.id}
-                  className="panel flex items-center justify-between p-4 transition-colors hover:border-paper/40"
+                  className="panel flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 transition-colors hover:border-paper/40"
                 >
                   <Link
                     href={`/u/${u.username}`}
                     className="flex items-center gap-3 hover:opacity-85"
                   >
-                    <span className="display grid h-10 w-10 place-items-center rounded-full border border-line bg-black/60 text-sm font-bold text-paper">
+                    <span className="display grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line bg-black/60 text-sm font-bold text-paper">
                       {u.avatarGlyph}
                     </span>
                     <div>
@@ -275,7 +310,7 @@ export function ProfileFeedTabs({
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/messages?with=${u.username}`}
-                      className="mono rounded border border-line px-3 py-1.5 text-[10px] text-paper hover:border-paper hover:bg-white/5"
+                      className="mono rounded border border-line bg-white/5 px-3 py-1.5 text-[10px] text-paper hover:border-paper hover:bg-white/10"
                     >
                       Message ✈️
                     </Link>

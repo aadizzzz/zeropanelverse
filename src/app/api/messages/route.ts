@@ -58,10 +58,33 @@ export async function GET(req: NextRequest) {
     const slugs = Array.from(
       new Set(msgs.map((m) => m.titleSlug).filter((s): s is string => Boolean(s))),
     );
-    let titleMap: Record<string, { name: string; accent: string; format: string }> = {};
+    let titleMap: Record<
+      string,
+      {
+        slug: string;
+        name: string;
+        accent: string;
+        accentSoft: string;
+        format: string;
+        glyph: string;
+        texture: string;
+        year: number;
+        rating: number;
+      }
+    > = {};
     if (slugs.length > 0) {
       const titleRows = await db
-        .select({ slug: titles.slug, name: titles.name, accent: titles.accent, format: titles.format })
+        .select({
+          slug: titles.slug,
+          name: titles.name,
+          accent: titles.accent,
+          accentSoft: titles.accentSoft,
+          format: titles.format,
+          glyph: titles.glyph,
+          texture: titles.texture,
+          year: titles.year,
+          rating: titles.rating,
+        })
         .from(titles);
       titleMap = Object.fromEntries(titleRows.map((t) => [t.slug, t]));
     }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
 
-type PartnerInfo = {
+export type PartnerInfo = {
   id: number;
   username: string;
   displayName: string;
@@ -13,7 +13,19 @@ type PartnerInfo = {
   avatarGlyph: string;
 };
 
-type MessageItem = {
+export type QuickTitle = {
+  slug: string;
+  name: string;
+  format: string;
+  accent: string;
+  accentSoft?: string;
+  glyph?: string;
+  texture?: string;
+  year?: number;
+  rating?: number;
+};
+
+export type MessageItem = {
   id: number;
   senderId: number;
   receiverId: number;
@@ -21,26 +33,15 @@ type MessageItem = {
   titleSlug: string | null;
   read: boolean;
   createdAt: string;
-  titleCard?: {
-    name: string;
-    accent: string;
-    format: string;
-  } | null;
+  titleCard?: QuickTitle | null;
 };
 
-type ConversationSummary = {
+export type ConversationSummary = {
   partner: PartnerInfo;
   lastMessage: string;
   lastMessageAt: string;
   isOutgoing: boolean;
   unreadCount: number;
-};
-
-type QuickTitle = {
-  slug: string;
-  name: string;
-  format: string;
-  accent: string;
 };
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -69,79 +70,86 @@ export function Messenger({
   const [inputText, setInputText] = useState("");
   const [selectedTitleSlug, setSelectedTitleSlug] = useState<string>("");
   const [showTitlePicker, setShowTitlePicker] = useState(false);
+  const [titlePickerSearch, setTitlePickerSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const activePartnerRef = useRef<PartnerInfo | null>(activePartner);
 
-  // Scroll to bottom of chat
-  const scrollToBottom = (smooth = true) => {
+  useEffect(() => {
+    activePartnerRef.current = activePartner;
+  }, [activePartner]);
+
+  // Smooth scroll to bottom
+  const scrollToBottom = useCallback((smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-  };
+  }, []);
 
-  // Fetch inbox conversations
-  // Fetch messages with active partner
-  const fetchMessages = useCallback(async (partnerId: number, isSilent = false) => {
-    if (!isSilent) setLoadingMessages(true);
-    try {
-      const res = await fetch(`/api/messages?with=${partnerId}`);
-      if (res.ok) {
+  // Fetch messages with active partner (silent polling vs manual load)
+  const fetchMessages = useCallback(
+    async (partnerId: number, isSilent = false) => {
+      if (!isSilent) setLoadingMessages(true);
+      try {
+        const res = await fetch(`/api/messages?with=${partnerId}`);
+        if (!res.ok) return;
         const data = await res.json();
         if (data.ok) {
-          setMessages(data.messages || []);
+          const newMsgs: MessageItem[] = data.messages || [];
+
+          setMessages((prev) => {
+            // Check if identical to avoid flashing or re-renders
+            if (
+              prev.length === newMsgs.length &&
+              prev.every((m, idx) => m.id === newMsgs[idx]?.id)
+            ) {
+              return prev;
+            }
+
+            // If new messages arrived, scroll smoothly
+            if (newMsgs.length > prev.length) {
+              setTimeout(() => scrollToBottom(true), 60);
+            }
+            return newMsgs;
+          });
+
           if (data.partner) {
-            setActivePartner(data.partner);
+            setActivePartner((prev) => (prev?.id === data.partner.id ? prev : data.partner));
           }
+
           if (!isSilent) {
             setTimeout(() => scrollToBottom(false), 50);
           }
         }
+      } catch {
+        // silent error suppression
+      } finally {
+        if (!isSilent) setLoadingMessages(false);
       }
-    } finally {
-      if (!isSilent) setLoadingMessages(false);
-    }
-  }, []);
+    },
+    [scrollToBottom],
+  );
 
+  // Refresh inbox summary list without touching messages feed
   const refreshInbox = useCallback(async () => {
     try {
       const res = await fetch("/api/messages");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.ok) {
-          setConversations(data.conversations || []);
-          setAllUsers(data.allUsers || []);
-
-          // If targetUsername was passed in query, find partner
-          if (targetUsername) {
-            const found = (data.allUsers as PartnerInfo[]).find(
-              (u) => u.username.toLowerCase() === targetUsername.toLowerCase(),
-            );
-            if (found) {
-              setActivePartner(found);
-              void fetchMessages(found.id, false);
-            }
-          }
-        }
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.ok) {
+        setConversations(data.conversations || []);
+        setAllUsers(data.allUsers || []);
       }
     } catch {
-      // ignore network errors on poll
+      // silent
     }
-  }, [targetUsername, fetchMessages]);
+  }, []);
 
-  // Select a conversation partner
-  const selectPartner = (partner: PartnerInfo) => {
-    setActivePartner(partner);
-    setSearchQuery("");
-    void fetchMessages(partner.id, false);
-  };
-
-  // Initial load
+  // Initial load & handle ?with= URL param
   useEffect(() => {
     let ignore = false;
-
-    async function loadInbox() {
+    async function loadInitial() {
       try {
         const res = await fetch("/api/messages");
         if (!res.ok) return;
@@ -161,35 +169,39 @@ export function Messenger({
           }
         }
       } catch {
-        // ignore network error
+        // ignore
       }
     }
-
-    void loadInbox();
-
+    void loadInitial();
     return () => {
       ignore = true;
     };
   }, [targetUsername, fetchMessages]);
 
-  // Polling for live chat updates every 3.5 seconds
+  // Silent polling every 4s: refreshes inbox and active conversation without flashing
   useEffect(() => {
     const timer = setInterval(() => {
       void refreshInbox();
-      if (activePartner) {
-        void fetchMessages(activePartner.id, true);
+      if (activePartnerRef.current) {
+        void fetchMessages(activePartnerRef.current.id, true);
       }
-    }, 3500);
+    }, 4000);
 
-    return () => {
-      clearInterval(timer);
-    };
-  }, [activePartner, refreshInbox, fetchMessages]);
+    return () => clearInterval(timer);
+  }, [refreshInbox, fetchMessages]);
 
-  // Auto-scroll when new messages arrive
-  useEffect(() => {
-    scrollToBottom(true);
-  }, [messages.length]);
+  // Select a conversation partner
+  const selectPartner = (partner: PartnerInfo) => {
+    setActivePartner(partner);
+    setSearchQuery("");
+    void fetchMessages(partner.id, false);
+  };
+
+  // Back to inbox on mobile
+  const handleBackToInbox = () => {
+    setActivePartner(null);
+    router.replace("/messages");
+  };
 
   // Send message
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -202,6 +214,7 @@ export function Messenger({
 
     // Optimistic UI update
     const tempId = Date.now();
+    const matchedTitle = titleSlug ? availableTitles.find((t) => t.slug === titleSlug) ?? null : null;
     const optimisticMsg: MessageItem = {
       id: tempId,
       senderId: currentUser.id,
@@ -210,9 +223,7 @@ export function Messenger({
       titleSlug: titleSlug || null,
       read: false,
       createdAt: new Date().toISOString(),
-      titleCard: titleSlug
-        ? availableTitles.find((t) => t.slug === titleSlug) ?? null
-        : null,
+      titleCard: matchedTitle,
     };
 
     setMessages((prev) => [...prev, optimisticMsg]);
@@ -220,6 +231,7 @@ export function Messenger({
     setSelectedTitleSlug("");
     setShowTitlePicker(false);
     setSending(true);
+    setTimeout(() => scrollToBottom(true), 40);
 
     try {
       const res = await fetch("/api/messages", {
@@ -235,13 +247,12 @@ export function Messenger({
       if (res.ok) {
         const data = await res.json();
         if (data.ok && data.message) {
-          // Replace temp id with real id
           setMessages((prev) =>
             prev.map((m) => (m.id === tempId ? { ...m, id: data.message.id } : m)),
           );
         }
       }
-      refreshInbox();
+      void refreshInbox();
     } catch {
       // keep message in view
     } finally {
@@ -249,7 +260,7 @@ export function Messenger({
     }
   };
 
-  // Filtered users for search or conversation list
+  // Filtered users for search in left sidebar
   const filteredUsers = searchQuery.trim()
     ? allUsers.filter(
         (u) =>
@@ -258,14 +269,28 @@ export function Messenger({
       )
     : [];
 
+  // Filtered titles for title recommendation picker
+  const filteredAvailableTitles = titlePickerSearch.trim()
+    ? availableTitles.filter((t) =>
+        t.name.toLowerCase().includes(titlePickerSearch.toLowerCase()),
+      )
+    : availableTitles;
+
+  const isChatOpenOnMobile = activePartner !== null;
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-8">
       {/* Container simulating Instagram Direct Web Interface */}
-      <div className="panel grain grid h-[780px] overflow-hidden rounded-xl border border-line bg-ink/90 shadow-2xl backdrop-blur-xl md:grid-cols-[340px_1fr]">
+      <div className="panel grain overflow-hidden rounded-xl border border-line bg-ink/90 shadow-2xl backdrop-blur-xl h-[calc(100dvh-130px)] min-h-[520px] max-h-[820px] flex md:grid md:grid-cols-[320px_1fr]">
         {/* ================= LEFT SIDEBAR (Inbox & Threads) ================= */}
-        <aside className="flex h-full flex-col border-b border-line md:border-b-0 md:border-r">
+        {/* Hidden on mobile when chat is open */}
+        <aside
+          className={`h-full flex-col border-b border-line md:border-b-0 md:border-r w-full md:w-[320px] shrink-0 ${
+            isChatOpenOnMobile ? "hidden md:flex" : "flex"
+          }`}
+        >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3.5 sm:px-5">
             <div className="flex items-center gap-2.5">
               <span className="display grid h-8 w-8 place-items-center bg-paper text-xs font-bold text-ink">
                 {currentUser.avatarGlyph}
@@ -284,28 +309,16 @@ export function Messenger({
           </div>
 
           {/* Search Box */}
-          <div className="border-b border-line px-4 py-3">
+          <div className="border-b border-line px-3.5 py-2.5">
             <div className="relative">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search panelist or username..."
-                className="w-full rounded-lg border border-line bg-black/40 px-3.5 py-2 pl-9 text-xs text-paper placeholder:text-mute focus:border-paper focus:outline-none"
+                className="w-full rounded-lg border border-line bg-black/40 px-3 py-1.5 pl-8 text-xs text-paper placeholder:text-mute focus:border-paper focus:outline-none"
               />
-              <svg
-                className="absolute left-3 top-2.5 h-3.5 w-3.5 text-mute"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
+              <span className="absolute left-2.5 top-2 text-xs text-mute">🔍</span>
             </div>
           </div>
 
@@ -353,7 +366,7 @@ export function Messenger({
                     <span className="text-3xl">💬</span>
                     <p className="mt-3 text-xs text-dim">No conversations yet.</p>
                     <p className="mt-1 text-[11px] text-mute">
-                      Pick a panelist below or search to send your first message!
+                      Pick a panelist below to start chatting!
                     </p>
                   </div>
                 ) : (
@@ -365,7 +378,7 @@ export function Messenger({
                         key={c.partner.id}
                         type="button"
                         onClick={() => selectPartner(c.partner)}
-                        className={`flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors ${
+                        className={`flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors ${
                           isSelected
                             ? "bg-paper/10 border-l-2 border-paper"
                             : "hover:bg-white/5"
@@ -373,7 +386,7 @@ export function Messenger({
                       >
                         {/* Avatar */}
                         <div className="relative shrink-0">
-                          <div className="display grid h-11 w-11 place-items-center rounded-full border border-line bg-black/60 text-sm font-bold text-paper">
+                          <div className="display grid h-10 w-10 place-items-center rounded-full border border-line bg-black/60 text-xs font-bold text-paper">
                             {c.partner.avatarGlyph}
                           </div>
                           {c.unreadCount > 0 && (
@@ -399,14 +412,10 @@ export function Messenger({
                           <div className="mt-0.5 flex items-center justify-between gap-1">
                             <p
                               className={`truncate text-[11px] ${
-                                c.unreadCount > 0
-                                  ? "font-medium text-paper"
-                                  : "text-dim"
+                                c.unreadCount > 0 ? "font-medium text-paper" : "text-dim"
                               }`}
                             >
-                              {c.isOutgoing ? (
-                                <span className="text-mute">You: </span>
-                              ) : null}
+                              {c.isOutgoing ? <span className="text-mute">You: </span> : null}
                               {c.lastMessage}
                             </p>
                             {c.unreadCount > 0 && (
@@ -421,8 +430,8 @@ export function Messenger({
 
                 {/* Suggestions / Discover Panelists Section */}
                 <div className="border-t border-line bg-black/20 p-3">
-                  <div className="mono mb-2 px-2 text-[9px] uppercase tracking-wider text-mute">
-                    Archive Panelists
+                  <div className="mono mb-2 px-1 text-[9px] uppercase tracking-wider text-mute">
+                    Community Panelists
                   </div>
                   <div className="space-y-1">
                     {allUsers.slice(0, 4).map((u) => (
@@ -436,7 +445,9 @@ export function Messenger({
                           <span className="display grid h-6 w-6 place-items-center rounded-full border border-line bg-black text-[10px] text-paper">
                             {u.avatarGlyph}
                           </span>
-                          <span className="text-[11px] text-paper">{u.displayName}</span>
+                          <span className="text-[11px] text-paper truncate max-w-[150px]">
+                            {u.displayName}
+                          </span>
                         </div>
                         <span
                           className={`mono text-[8px] uppercase ${LEVEL_COLORS[u.experienceLevel] || ""}`}
@@ -452,73 +463,89 @@ export function Messenger({
           </div>
         </aside>
 
-        {/* ================= RIGHT PANE (Instagram Chat Window) ================= */}
-        <main className="flex h-full flex-col bg-black/20">
+        {/* ================= RIGHT PANE (Chat Window) ================= */}
+        {/* Visible when activePartner is selected, or always on tablet/desktop */}
+        <main
+          className={`h-full flex-col bg-black/20 flex-1 min-w-0 ${
+            !isChatOpenOnMobile ? "hidden md:flex" : "flex"
+          }`}
+        >
           {activePartner ? (
             <>
               {/* Chat Header */}
-              <div className="flex items-center justify-between border-b border-line px-5 py-3.5 backdrop-blur-md">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between border-b border-line px-3 py-2.5 sm:px-5 sm:py-3.5 backdrop-blur-md">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  {/* Mobile Back Button to return to Inbox */}
+                  <button
+                    type="button"
+                    onClick={handleBackToInbox}
+                    className="flex items-center gap-1 rounded border border-line bg-white/5 px-2 py-1 text-xs text-paper hover:bg-white/10 md:hidden"
+                    title="Back to inbox"
+                  >
+                    <span>←</span>
+                    <span className="mono text-[9px]">Inbox</span>
+                  </button>
+
                   <Link
                     href={`/u/${activePartner.username}`}
-                    className="display grid h-10 w-10 place-items-center rounded-full border border-line bg-ink text-sm font-bold text-paper transition-transform hover:scale-105"
+                    className="display grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-full border border-line bg-ink text-xs sm:text-sm font-bold text-paper"
                   >
                     {activePartner.avatarGlyph}
                   </Link>
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0 truncate">
+                    <div className="flex items-center gap-1.5 truncate">
                       <Link
                         href={`/u/${activePartner.username}`}
-                        className="text-sm font-semibold text-paper hover:underline"
+                        className="text-xs sm:text-sm font-semibold text-paper hover:underline truncate"
                       >
                         {activePartner.displayName}
                       </Link>
                       <span
-                        className={`mono rounded px-1.5 py-0.5 text-[8px] uppercase ${LEVEL_COLORS[activePartner.experienceLevel] || ""}`}
+                        className={`mono rounded px-1.5 py-0.2 text-[7.5px] sm:text-[8px] uppercase ${LEVEL_COLORS[activePartner.experienceLevel] || ""}`}
                       >
                         {activePartner.experienceLevel}
                       </span>
                     </div>
-                    <span className="mono block text-[10px] text-mute">
-                      @{activePartner.username} · Active in archive
+                    <span className="mono block text-[9px] text-mute truncate">
+                      @{activePartner.username}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <Link
                     href={`/u/${activePartner.username}`}
-                    className="mono rounded border border-line px-3 py-1.5 text-[10px] text-dim transition-colors hover:border-paper hover:text-paper"
+                    className="mono rounded border border-line px-2.5 py-1 text-[9px] text-dim transition-colors hover:border-paper hover:text-paper"
                   >
-                    View Profile
+                    Profile →
                   </Link>
                 </div>
               </div>
 
               {/* Messages Feed */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5">
-                {/* Intro Card */}
-                <div className="my-4 flex flex-col items-center justify-center text-center">
-                  <div className="display grid h-16 w-16 place-items-center rounded-full border border-line bg-black/60 text-2xl text-paper">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3">
+                {/* Intro Card (compact on mobile) */}
+                <div className="my-2 flex flex-col items-center justify-center text-center sm:my-4">
+                  <div className="display grid h-10 w-10 sm:h-14 sm:w-14 place-items-center rounded-full border border-line bg-black/60 text-lg sm:text-2xl text-paper">
                     {activePartner.avatarGlyph}
                   </div>
-                  <h4 className="display mt-2 text-base text-paper">
+                  <h4 className="display mt-1 text-sm sm:text-base text-paper">
                     {activePartner.displayName}
                   </h4>
-                  <p className="mono text-[10px] text-mute">@{activePartner.username}</p>
-                  <p className="mt-1 max-w-xs text-xs text-dim">
-                    Direct communication for anime recommendations, panel debates, and spoiler-free advice.
+                  <p className="mono text-[9px] sm:text-[10px] text-mute">@{activePartner.username}</p>
+                  <p className="mt-1 hidden max-w-xs text-xs text-dim sm:block">
+                    Direct discussions, anime recommendations, and spoiler-safe advice.
                   </p>
-                  <div className="mt-3 h-px w-20 bg-line" />
+                  <div className="mt-2 h-px w-16 bg-line" />
                 </div>
 
                 {loadingMessages ? (
-                  <div className="flex justify-center p-8 text-xs text-mute">
+                  <div className="flex justify-center p-6 text-xs text-mute">
                     Loading conversation...
                   </div>
                 ) : messages.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-mute">
-                    Say hello to @{activePartner.username}! Start discussing your favorite titles.
+                  <div className="p-6 text-center text-xs text-mute">
+                    Say hello to @{activePartner.username}! Start discussing anime and manga titles.
                   </div>
                 ) : (
                   messages.map((msg, index) => {
@@ -532,20 +559,20 @@ export function Messenger({
                         className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
                       >
                         <div
-                          className={`flex max-w-[80%] sm:max-w-[70%] items-end gap-2 ${
+                          className={`flex max-w-[88%] sm:max-w-[75%] items-end gap-1.5 sm:gap-2 ${
                             isMine ? "flex-row-reverse" : "flex-row"
                           }`}
                         >
                           {!isMine && !isSequential && (
-                            <span className="display grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line bg-ink text-[10px] font-bold text-paper">
+                            <span className="display grid h-6 w-6 sm:h-7 sm:w-7 shrink-0 place-items-center rounded-full border border-line bg-ink text-[9px] sm:text-[10px] font-bold text-paper">
                               {activePartner.avatarGlyph}
                             </span>
                           )}
-                          {!isMine && isSequential && <div className="w-7 shrink-0" />}
+                          {!isMine && isSequential && <div className="w-6 sm:w-7 shrink-0" />}
 
-                          {/* Message Bubble (Instagram Style) */}
+                          {/* Message Bubble */}
                           <div
-                            className={`group relative px-4 py-2.5 text-[13px] leading-relaxed transition-all ${
+                            className={`group relative px-3.5 py-2 sm:px-4 sm:py-2.5 text-[12.5px] sm:text-[13px] leading-relaxed transition-all ${
                               isMine
                                 ? "rounded-2xl rounded-br-sm bg-gradient-to-r from-neutral-200 to-white text-black shadow-md font-normal"
                                 : "rounded-2xl rounded-bl-sm border border-line bg-[#161616] text-[#e0e0e0] shadow-sm"
@@ -554,34 +581,82 @@ export function Messenger({
                             {/* Message text */}
                             {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
 
-                            {/* Embedded Anime Recommendation Card if attached */}
+                            {/* ================= EMBEDDED ANIME POSTER CARD ================= */}
                             {msg.titleCard && (
-                              <div className="mt-2.5 overflow-hidden rounded-lg border border-line/60 bg-black/40 p-2.5">
-                                <div className="mono text-[8px] uppercase tracking-wider text-mute">
-                                  Recommended Anime
-                                </div>
-                                <div className="mt-1 flex items-center justify-between gap-2">
-                                  <div>
-                                    <span className="display block text-xs font-bold text-paper">
-                                      {msg.titleCard.name}
-                                    </span>
-                                    <span className="mono text-[9px] text-mute uppercase">
-                                      {msg.titleCard.format}
-                                    </span>
-                                  </div>
+                              <div className="mt-2.5 overflow-hidden rounded-lg border border-line/80 bg-black/70 shadow-md">
+                                <div className="flex items-stretch gap-2.5 p-2 sm:p-2.5">
+                                  {/* Poster Art Visual */}
                                   <Link
                                     href={`/title/${msg.titleSlug}`}
-                                    className="mono rounded border border-line bg-paper/10 px-2 py-1 text-[9px] text-paper hover:bg-paper hover:text-ink"
+                                    className="relative flex w-14 sm:w-16 shrink-0 flex-col justify-between overflow-hidden rounded border border-line/80 bg-ink-raise p-1.5 aspect-[3/4]"
+                                    style={{
+                                      borderColor: msg.titleCard.accent || "var(--color-line)",
+                                    }}
                                   >
-                                    View Title →
+                                    <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-transparent opacity-80" />
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-30 select-none">
+                                      <span
+                                        className="display text-2xl sm:text-3xl font-bold"
+                                        style={{ color: msg.titleCard.accent || "#fff" }}
+                                      >
+                                        {msg.titleCard.glyph || "零"}
+                                      </span>
+                                    </div>
+                                    <div className="relative flex justify-between items-center text-[7px] mono text-mute">
+                                      <span className="uppercase">{msg.titleCard.format}</span>
+                                      {msg.titleCard.year ? <span>{msg.titleCard.year}</span> : null}
+                                    </div>
+                                    <div className="relative mt-auto">
+                                      <span
+                                        className="display line-clamp-1 text-[8.5px] font-bold text-paper"
+                                        style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}
+                                      >
+                                        {msg.titleCard.name}
+                                      </span>
+                                    </div>
                                   </Link>
+
+                                  {/* Poster Info & Link */}
+                                  <div className="flex flex-1 flex-col justify-between py-0.5 min-w-0">
+                                    <div>
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="mono text-[7.5px] sm:text-[8px] uppercase tracking-wider text-mute">
+                                          {msg.titleCard.format} recommendation
+                                        </span>
+                                        {msg.titleCard.rating ? (
+                                          <span
+                                            className="mono text-[8.5px] font-bold"
+                                            style={{ color: msg.titleCard.accent || "#fbbf24" }}
+                                          >
+                                            ★ {msg.titleCard.rating.toFixed(1)}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      <Link
+                                        href={`/title/${msg.titleSlug}`}
+                                        className="display block mt-1 text-xs sm:text-sm font-bold text-paper hover:underline truncate"
+                                      >
+                                        {msg.titleCard.name}
+                                      </Link>
+                                    </div>
+
+                                    <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-line/60 pt-1">
+                                      <Link
+                                        href={`/title/${msg.titleSlug}`}
+                                        className="mono inline-flex items-center gap-1 text-[8.5px] sm:text-[9px] text-paper hover:underline"
+                                      >
+                                        <span>View Title Guide</span>
+                                        <span>→</span>
+                                      </Link>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             )}
 
-                            {/* Timestamp on hover */}
+                            {/* Timestamp */}
                             <span
-                              className={`mono mt-1 block text-[8px] opacity-60 ${
+                              className={`mono mt-1 block text-[7.5px] sm:text-[8px] opacity-60 ${
                                 isMine ? "text-right text-black/80" : "text-left text-mute"
                               }`}
                             >
@@ -596,12 +671,12 @@ export function Messenger({
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Quick Title Selector Dropdown (Share Title in Chat) */}
+              {/* Quick Title Selector Dropdown with Posters */}
               {showTitlePicker && (
-                <div className="border-t border-line bg-black/90 p-3">
+                <div className="border-t border-line bg-ink/95 p-3 backdrop-blur-md shadow-2xl">
                   <div className="flex items-center justify-between mb-2">
                     <span className="mono text-[9px] uppercase tracking-wider text-paper">
-                      Attach Anime Recommendation:
+                      Select Anime to Recommend:
                     </span>
                     <button
                       type="button"
@@ -611,22 +686,43 @@ export function Messenger({
                       Close ✕
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-                    {availableTitles.map((t) => (
+
+                  <input
+                    type="text"
+                    value={titlePickerSearch}
+                    onChange={(e) => setTitlePickerSearch(e.target.value)}
+                    placeholder="Filter anime titles..."
+                    className="mb-2 w-full rounded border border-line bg-black/60 px-2.5 py-1 text-xs text-paper placeholder:text-mute focus:outline-none"
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
+                    {filteredAvailableTitles.map((t) => (
                       <button
                         key={t.slug}
                         type="button"
                         onClick={() => {
                           setSelectedTitleSlug(t.slug);
                           setShowTitlePicker(false);
+                          setTitlePickerSearch("");
                         }}
-                        className={`mono rounded border px-2 py-1 text-[9px] transition-colors ${
+                        className={`flex items-center gap-2 rounded border p-1.5 text-left transition-colors ${
                           selectedTitleSlug === t.slug
                             ? "border-paper bg-paper text-ink"
-                            : "border-line text-dim hover:border-paper hover:text-paper"
+                            : "border-line bg-white/[0.02] text-dim hover:border-paper hover:text-paper"
                         }`}
                       >
-                        {t.name}
+                        <span
+                          className="display grid h-6 w-6 shrink-0 place-items-center rounded border text-[10px] font-bold"
+                          style={{ borderColor: t.accent, color: t.accent }}
+                        >
+                          {t.glyph || t.name.charAt(0)}
+                        </span>
+                        <div className="min-w-0 flex-1 truncate">
+                          <span className="block text-xs font-semibold truncate">{t.name}</span>
+                          <span className="mono block text-[8px] text-mute uppercase">
+                            {t.format} {t.year ? `· ${t.year}` : ""}
+                          </span>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -635,34 +731,34 @@ export function Messenger({
 
               {/* Selected Title Badge */}
               {selectedTitleSlug && (
-                <div className="flex items-center justify-between border-t border-line bg-paper/5 px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="mono text-[9px] text-mute">Recommending:</span>
-                    <span className="display text-xs text-paper">
+                <div className="flex items-center justify-between border-t border-line bg-paper/5 px-3 py-1.5 sm:px-4 sm:py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="mono text-[8.5px] text-mute shrink-0">Recommending:</span>
+                    <span className="display text-xs text-paper truncate">
                       {availableTitles.find((t) => t.slug === selectedTitleSlug)?.name}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSelectedTitleSlug("")}
-                    className="mono text-[9px] text-mute hover:text-red-400"
+                    className="mono text-[9px] text-mute hover:text-red-400 shrink-0 ml-2"
                   >
                     Remove ✕
                   </button>
                 </div>
               )}
 
-              {/* Input Bar (Instagram Style) */}
-              <div className="border-t border-line bg-black/60 p-3 sm:p-4">
+              {/* Input Bar */}
+              <div className="border-t border-line bg-black/60 p-2.5 sm:p-3.5">
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                  {/* Share Anime Recommendation Button */}
+                  {/* Share Anime Recommendation Button with Poster icon */}
                   <button
                     type="button"
                     onClick={() => setShowTitlePicker((prev) => !prev)}
-                    title="Share an Anime"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-white/5 text-base transition-colors hover:border-paper hover:bg-white/10"
+                    title="Recommend Anime with Poster"
+                    className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border border-line bg-white/5 text-sm sm:text-base transition-colors hover:border-paper hover:bg-white/10"
                   >
-                    📺
+                    🎬
                   </button>
 
                   {/* Message Input */}
@@ -672,7 +768,7 @@ export function Messenger({
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
                       placeholder={`Message @${activePartner.username}...`}
-                      className="w-full rounded-full border border-line bg-black/40 px-5 py-2.5 text-xs text-paper placeholder:text-mute focus:border-paper focus:outline-none"
+                      className="w-full rounded-full border border-line bg-black/40 px-4 py-2 sm:px-5 sm:py-2.5 text-xs text-paper placeholder:text-mute focus:border-paper focus:outline-none"
                     />
                   </div>
 
@@ -680,9 +776,9 @@ export function Messenger({
                   <button
                     type="submit"
                     disabled={sending || (!inputText.trim() && !selectedTitleSlug)}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-paper text-ink transition-transform hover:scale-105 disabled:opacity-40"
+                    className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-paper text-ink transition-transform hover:scale-105 disabled:opacity-40"
                   >
-                    <svg className="h-4 w-4 fill-current rotate-90" viewBox="0 0 24 24">
+                    <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-current rotate-90" viewBox="0 0 24 24">
                       <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                     </svg>
                   </button>
@@ -691,21 +787,21 @@ export function Messenger({
             </>
           ) : (
             /* Empty State: No Conversation Selected */
-            <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-              <div className="display grid h-24 w-24 place-items-center rounded-full border border-line/60 bg-black/40 text-4xl shadow-inner">
+            <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+              <div className="display grid h-20 w-20 place-items-center rounded-full border border-line/60 bg-black/40 text-3xl shadow-inner">
                 ✈️
               </div>
-              <h3 className="display mt-5 text-2xl text-paper">Your Messages</h3>
+              <h3 className="display mt-4 text-xl sm:text-2xl text-paper">Your Messages</h3>
               <p className="mt-2 max-w-sm text-xs leading-relaxed text-dim">
-                Send direct anime recommendations, argue panel composition, or discuss adaptations with other community members.
+                Directly share anime recommendations with posters, debate panels, and chat with community members.
               </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
                 {allUsers.slice(0, 3).map((u) => (
                   <button
                     key={u.id}
                     type="button"
                     onClick={() => selectPartner(u)}
-                    className="mono rounded-full border border-line px-4 py-2 text-[10px] text-paper transition-colors hover:border-paper hover:bg-white/5"
+                    className="mono rounded-full border border-line px-3.5 py-1.5 text-[9.5px] text-paper transition-colors hover:border-paper hover:bg-white/5"
                   >
                     Chat with @{u.username}
                   </button>

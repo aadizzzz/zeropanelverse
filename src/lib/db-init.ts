@@ -38,9 +38,7 @@ const DEMO_PASSWORD = "zeropanelverse";
 
 /** v1: catalogue, demo users, first batch of panels. */
 async function seedBase(): Promise<void> {
-  const existing = await db.select({ count: sql<number>`count(*)::int` }).from(titles);
-  if ((existing[0]?.count ?? 0) > 0) return;
-
+  // Always ensure all seedTitles are in the database
   await db.insert(titles).values(seedTitles).onConflictDoNothing();
 
   const passwordHash = hashPassword(DEMO_PASSWORD);
@@ -79,9 +77,6 @@ async function seedBase(): Promise<void> {
 
 /** v2: franchise timeline trees, discussion rooms, spoiler preferences. Runs once. */
 async function seedFranchise(): Promise<void> {
-  const existing = await db.select({ count: sql<number>`count(*)::int` }).from(titleNodes);
-  if ((existing[0]?.count ?? 0) > 0) return;
-
   const titleRows = await db.select({ id: titles.id, slug: titles.slug }).from(titles);
   const titleMap = new Map(titleRows.map((row) => [row.slug, row.id]));
 

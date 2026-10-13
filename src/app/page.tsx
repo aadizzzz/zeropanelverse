@@ -41,7 +41,7 @@ export default async function HomePage() {
   try {
     await ensureSeeded();
     const res = await Promise.all([
-      db.select().from(titles).orderBy(desc(titles.popularity)).limit(8),
+      db.select().from(titles).orderBy(desc(titles.popularity)).limit(24),
       db
         .select({ format: titles.format, count: sql<number>`count(*)::int` })
         .from(titles)
@@ -72,7 +72,7 @@ export default async function HomePage() {
   } catch (err) {
     isDbConnected = false;
     // Fallback to static seed data so the homepage ALWAYS loads cleanly even before DB connection!
-    featured = seedTitles.slice(0, 8);
+    featured = seedTitles.slice(0, 24);
     counts = [
       { format: "anime", count: seedTitles.filter((t) => t.format === "anime").length },
       { format: "manga", count: seedTitles.filter((t) => t.format === "manga").length },
@@ -244,6 +244,49 @@ export default async function HomePage() {
           >
             View full library
           </Link>
+        </div>
+
+        {/* Jujutsu Kaisen Season 3: The Culling Game Premiere Spotlight Banner */}
+        <div className="mt-8 relative overflow-hidden border border-red-500/40 bg-ink-raise p-6 sm:p-8 panel group">
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-30 transition-transform duration-700 group-hover:scale-105"
+            style={{ backgroundImage: "url(/posters/jujutsu-kaisen-culling-game.jpg)" }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/90 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink/90 via-transparent to-transparent sm:hidden" />
+          
+          <div className="relative z-10 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mono border border-red-500/60 bg-red-950/80 px-2 py-0.5 text-[9px] font-bold tracking-wider text-red-300">
+                PREMIERE SPOTLIGHT
+              </span>
+              <span className="mono text-[9px] text-mute">SEASON 3 ARC • MAPPA</span>
+              <span className="mono text-[9px] text-red-400">★ 9.3</span>
+            </div>
+            
+            <h3 className="display mt-3 text-2xl sm:text-4xl text-paper">
+              Jujutsu Kaisen: The Culling Game
+            </h3>
+            
+            <p className="mt-2 text-xs sm:text-sm text-dim leading-relaxed">
+              Following the Shibuya Incident, Kenjaku initiates an apocalyptic ritual slaughter across 10 colonies in Japan. 19 days, lethal barrier rules, reincarnated ancient sorcerers, and the fight to unseal Satoru Gojo.
+            </p>
+            
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                href="/title/jujutsu-kaisen-culling-game"
+                className="mono bg-red-600 px-5 py-2.5 text-[11px] font-semibold text-paper hover:bg-red-500 transition-colors shadow-lg shadow-red-900/30"
+              >
+                Enter Culling Game Archive →
+              </Link>
+              <Link
+                href="/title/jujutsu-kaisen"
+                className="mono border border-line bg-ink/80 px-5 py-2.5 text-[11px] text-paper hover:border-paper transition-colors"
+              >
+                View Full JJK Timeline Tree
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

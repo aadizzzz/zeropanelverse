@@ -80,6 +80,11 @@ export default async function MessagesPage({
         name: titles.name,
         format: titles.format,
         accent: titles.accent,
+        accentSoft: titles.accentSoft,
+        glyph: titles.glyph,
+        texture: titles.texture,
+        year: titles.year,
+        rating: titles.rating,
       })
       .from(titles)
       .orderBy(asc(titles.name));
@@ -90,6 +95,11 @@ export default async function MessagesPage({
       name: t.name,
       format: t.format,
       accent: t.accent,
+      accentSoft: t.accentSoft,
+      glyph: t.glyph,
+      texture: t.texture,
+      year: t.year,
+      rating: t.rating,
     }));
   }
 

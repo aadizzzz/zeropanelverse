@@ -321,7 +321,7 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
             accentSoft={title.accentSoft}
             texture={title.texture}
             year={title.year}
-            className="w-full max-w-[300px]"
+            className="w-full max-w-[300px] aspect-[3/4]"
           />
 
           <div className="flex flex-col gap-6">

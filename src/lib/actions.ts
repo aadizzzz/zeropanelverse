@@ -374,6 +374,7 @@ export async function followUserAction(
     .where(eq(follows.followingId, targetUserId));
 
   revalidatePath(`/u/[username]`, "page");
+  revalidatePath("/library");
   return { ok: true, following, count: countRows[0]?.count ?? 0 };
 }
 

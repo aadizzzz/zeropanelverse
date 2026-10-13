@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { NavLinks } from "@/components/NavLinks";
 import { logoutAction } from "@/lib/actions";
+import { NavSearchButton } from "@/components/NavSearchButton";
 import { LEVEL_LABELS, type SessionUser } from "@/lib/auth";
 
 export function Nav({ user }: { user: SessionUser | null }) {
@@ -24,12 +25,7 @@ export function Nav({ user }: { user: SessionUser | null }) {
         <NavLinks />
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/library"
-            className="mono border border-line px-3 py-2 text-[10px] text-dim transition-colors hover:border-paper hover:text-paper"
-          >
-            Search
-          </Link>
+          <NavSearchButton isLoggedIn={Boolean(user)} />
 
           {user ? (
             <div className="flex items-center gap-2">
@@ -83,8 +79,9 @@ export function Nav({ user }: { user: SessionUser | null }) {
       </div>
 
       <details className="group border-t border-line md:hidden">
-        <summary className="mono cursor-pointer list-none px-4 py-2 text-[10px] text-mute">
-          Menu
+        <summary className="mono cursor-pointer list-none px-4 py-2.5 text-[10px] text-dim hover:text-paper flex items-center justify-between bg-black/20">
+          <span>Navigation Menu</span>
+          <span className="text-[9px] text-mute group-open:rotate-180 transition-transform">▼</span>
         </summary>
         <div className="px-4 pb-3">
           <NavLinks vertical />

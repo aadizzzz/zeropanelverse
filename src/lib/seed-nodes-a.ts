@@ -192,6 +192,32 @@ export const nodesA: Record<string, SeedNode[]> = {
       heavy: "Gojo is sealed and Sukuna's rampage kills thousands, resetting the series' power ceiling.",
       pwr: "Domain expansions and Sukuna's full power redefine what earlier seasons called strong.",
     }),
+    n({
+      k: "s3-culling", p: "s2", label: "Season 3: The Culling Game Arc", kind: "season", y: 2025, rel: 5, story: 4, u: 24,
+      r: 9.3, pw: 92, pr: "essential", by: "MAPPA",
+      blurb: "Kenjaku initiates a nation-wide sorcerer death match. Yuji, Megumi, and Yuta enter the colonies.",
+      mild: "Deadly sorcerers from the past reincarnate to participate in the 10 barriers across Japan.",
+      heavy: "Sukuna makes his move on Megumi, Hakari's idle death gamble unfolds, and the stage is set for the battle against Gojo.",
+      pwr: "Colony-level barrier warfare and ancient sorcerers with unconstrained lethal domains.",
+    }),
+  ],
+
+  "jujutsu-kaisen-culling-game": [
+    n({
+      k: "culling-manga", label: "Manga: Culling Game Arc (Ch. 144-221)", kind: "source", y: 2021, rel: 1, story: 0, u: 78, unit: "ch",
+      r: 9.2, pr: "essential", by: "Gege Akutami",
+      blurb: "The raw source material: battle-royale colonies, complex cursed technique binding vows, and tactical warfare.",
+      mild: "Rules of the Culling Game are established as Yuji and Megumi seek allies.",
+      heavy: "Tsumiki is revealed as Yorozu, and Sukuna transfers into Megumi's body via Enchain binding vow.",
+    }),
+    n({
+      k: "culling-anime", p: "culling-manga", label: "Anime: Season 3", kind: "season", y: 2025, rel: 2, story: 1, u: 24,
+      r: 9.3, pw: 92, pr: "essential", by: "MAPPA",
+      blurb: "MAPPA's high-budget adaptation of the colonies: Tokyo No. 1, Tokyo No. 2, and Sendai.",
+      mild: "Higuruma Hiromi's courtroom domain and Hakari Kinji's feverish Pachinko domain.",
+      heavy: "Yuta Okkotsu battles four special grades consecutively in Sendai Colony.",
+      pwr: "Unprecedented domain expansions clashing simultaneously.",
+    }),
   ],
 
   "fullmetal-alchemist-brotherhood": [

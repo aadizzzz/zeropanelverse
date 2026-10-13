@@ -53,6 +53,11 @@ export default async function PublicProfilePage({
             slug: titles.slug,
             titleName: titles.name,
             accent: titles.accent,
+            accentSoft: titles.accentSoft,
+            glyph: titles.glyph,
+            texture: titles.texture,
+            year: titles.year,
+            format: titles.format,
           })
           .from(panels)
           .innerJoin(titles, eq(titles.id, panels.titleId))
@@ -65,8 +70,11 @@ export default async function PublicProfilePage({
             slug: titles.slug,
             name: titles.name,
             accent: titles.accent,
+            accentSoft: titles.accentSoft,
             glyph: titles.glyph,
             format: titles.format,
+            texture: titles.texture,
+            year: titles.year,
             status: watchlist.status,
           })
           .from(watchlist)
