@@ -223,6 +223,9 @@ async function runSeed(): Promise<void> {
 }
 
 export function ensureSeeded(): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    return Promise.resolve();
+  }
   if (!seedPromise) {
     seedPromise = runSeed().catch((error) => {
       seedPromise = null;

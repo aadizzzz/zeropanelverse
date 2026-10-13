@@ -60,6 +60,7 @@ export type SessionUser = Pick<
 >;
 
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
+  if (!process.env.DATABASE_URL) return null;
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
