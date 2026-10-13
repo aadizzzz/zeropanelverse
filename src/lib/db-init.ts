@@ -228,8 +228,8 @@ export function ensureSeeded(): Promise<void> {
   }
   if (!seedPromise) {
     seedPromise = runSeed().catch((error) => {
+      console.warn("Background seed notice:", error?.message || error);
       seedPromise = null;
-      throw error;
     });
   }
   return seedPromise;

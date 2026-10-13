@@ -55,17 +55,36 @@ export default async function TimelinePage({
   const formatParam = read("format") as TitleFormat | "all";
   const format: TitleFormat | "all" = FORMATS.includes(formatParam) ? formatParam : "all";
 
-  const [titleRows, nodeRows] = await Promise.all([
-    db.select().from(titles),
-    db
-      .select({
-        titleId: titleNodes.titleId,
-        power: titleNodes.powerLevel,
-        canon: titleNodes.canon,
-      })
-      .from(titleNodes)
-      .orderBy(asc(titleNodes.releaseOrder)),
-  ]);
+  let titleRows: any[] = [];
+  let nodeRows: any[] = [];
+
+  try {
+    const res = await Promise.all([
+      db.select().from(titles),
+      db
+        .select({
+          titleId: titleNodes.titleId,
+          power: titleNodes.powerLevel,
+          canon: titleNodes.canon,
+        })
+        .from(titleNodes)
+        .orderBy(asc(titleNodes.releaseOrder)),
+    ]);
+    titleRows = res[0];
+    nodeRows = res[1];
+  } catch (err) {
+    const { seedTitles } = await import("@/lib/seed-data");
+    const { seedNodes } = await import("@/lib/seed-franchise");
+    titleRows = seedTitles.map((t, idx) => ({ ...t, id: idx + 1 }));
+    nodeRows = Object.entries(seedNodes).flatMap(([slug, nodes], sIdx) => {
+      const titleId = sIdx + 1;
+      return nodes.map((n) => ({
+        titleId,
+        power: n.powerLevel,
+        canon: n.canon,
+      }));
+    });
+  }
 
   const info = new Map<number, { count: number; powers: number[] }>();
   for (const row of nodeRows) {

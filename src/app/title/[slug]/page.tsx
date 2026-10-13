@@ -10,6 +10,7 @@ import {
   watchlist,
   type TierInfo,
   type TitleTiers,
+  type TitleRow,
 } from "@/db/schema";
 import { ensureSeeded } from "@/lib/db-init";
 import { getCurrentUser } from "@/lib/auth";
@@ -22,86 +23,209 @@ import { WatchlistControls } from "@/components/WatchlistControls";
 import { TitleCard } from "@/components/TitleCard";
 import { FranchiseTree, type TreeNodeData } from "@/components/FranchiseTree";
 
+import { seedTitles, seedPanels } from "@/lib/seed-data";
+import { seedNodes, seedOpenPanels } from "@/lib/seed-franchise";
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const rows = await db.select().from(titles).where(eq(titles.slug, slug)).limit(1);
-  const title = rows[0];
-  if (!title) return { title: "Panel not found — ZeroPanelVerse" };
-  return {
-    title: `${title.name} — ZeroPanelVerse`,
-    description: title.synopsis.slice(0, 180),
-  };
+  try {
+    const rows = await db.select().from(titles).where(eq(titles.slug, slug)).limit(1);
+    const title = rows[0];
+    if (title) {
+      return {
+        title: `${title.name} — ZeroPanelVerse`,
+        description: title.synopsis.slice(0, 180),
+      };
+    }
+  } catch {}
+  const fallback = seedTitles.find((t) => t.slug === slug);
+  if (fallback) {
+    return {
+      title: `${fallback.name} — ZeroPanelVerse`,
+      description: fallback.synopsis.slice(0, 180),
+    };
+  }
+  return { title: "Panel not found — ZeroPanelVerse" };
 }
 
 export default async function TitlePage({ params }: { params: Promise<{ slug: string }> }) {
   await ensureSeeded();
   const { slug } = await params;
 
-  const titleRows = await db.select().from(titles).where(eq(titles.slug, slug)).limit(1);
-  const title = titleRows[0];
-  if (!title) notFound();
+  let title: any = null;
+  let treeNodes: TreeNodeData[] = [];
+  let panelRows: any[] = [];
+  let savedStatus: any = null;
+  let similar: any[] = [];
 
   const user = await getCurrentUser();
   const lens = await getLens(user);
   const openAccess = hasOpenAccess(lens);
-
-  /* ----------------------------- franchise tree ----------------------------- */
-  const nodeRows = await db
-    .select()
-    .from(titleNodes)
-    .where(eq(titleNodes.titleId, title.id))
-    .orderBy(asc(titleNodes.releaseOrder));
-
   const mildOk = canSee(lens, "mild");
   const heavyOk = canSee(lens, "heavy");
-  const treeNodes: TreeNodeData[] = nodeRows.map((row) => ({
-    key: row.nodeKey,
-    parentKey: row.parentKey,
-    label: row.label,
-    kind: row.kind,
-    year: row.year,
-    releaseOrder: row.releaseOrder,
-    chronoOrder: row.chronoOrder,
-    units: row.units,
-    unit: row.unit,
-    rating: row.rating,
-    power: row.powerLevel,
-    priority: row.priority,
-    canon: row.canon,
-    creator: row.creator,
-    blurb: row.blurb,
-    // Spoiler notes are withheld on the server unless the lens allows them.
-    mild: row.mildNote && mildOk ? row.mildNote : null,
-    mildLocked: Boolean(row.mildNote) && !mildOk,
-    heavy: row.heavyNote && heavyOk ? row.heavyNote : null,
-    heavyLocked: Boolean(row.heavyNote) && !heavyOk,
-    powerNote: row.powerNote && heavyOk ? row.powerNote : null,
-  }));
 
-  /* ------------------------------ discussion ------------------------------ */
-  const panelRows = await db
-    .select({
-      id: panels.id,
-      room: panels.room,
-      kind: panels.kind,
-      authorLevel: panels.authorLevel,
-      rating: panels.rating,
-      headline: panels.headline,
-      body: panels.body,
-      spoilerGrade: panels.spoilerGrade,
-      createdAt: panels.createdAt,
-      userId: panels.userId,
-      authorName: users.displayName,
-      authorUsername: users.username,
-      authorGlyph: users.avatarGlyph,
-      score: sql<number>`(select coalesce(sum(v.value), 0)::int from panel_votes v where v.panel_id = ${panels.id})`,
-    })
-    .from(panels)
-    .innerJoin(users, eq(users.id, panels.userId))
-    .where(eq(panels.titleId, title.id))
-    .orderBy(desc(panels.createdAt));
+  try {
+    const titleRows = await db.select().from(titles).where(eq(titles.slug, slug)).limit(1);
+    title = titleRows[0] ?? null;
+
+    if (title) {
+      /* ----------------------------- franchise tree ----------------------------- */
+      const nodeRows = await db
+        .select()
+        .from(titleNodes)
+        .where(eq(titleNodes.titleId, title.id))
+        .orderBy(asc(titleNodes.releaseOrder));
+
+      treeNodes = nodeRows.map((row) => ({
+        key: row.nodeKey,
+        parentKey: row.parentKey,
+        label: row.label,
+        kind: row.kind,
+        year: row.year,
+        releaseOrder: row.releaseOrder,
+        chronoOrder: row.chronoOrder,
+        units: row.units,
+        unit: row.unit,
+        rating: row.rating,
+        power: row.powerLevel,
+        priority: row.priority,
+        canon: row.canon,
+        creator: row.creator,
+        blurb: row.blurb,
+        mild: row.mildNote && mildOk ? row.mildNote : null,
+        mildLocked: Boolean(row.mildNote) && !mildOk,
+        heavy: row.heavyNote && heavyOk ? row.heavyNote : null,
+        heavyLocked: Boolean(row.heavyNote) && !heavyOk,
+        powerNote: row.powerNote && heavyOk ? row.powerNote : null,
+      }));
+
+      /* ------------------------------ discussion ------------------------------ */
+      panelRows = await db
+        .select({
+          id: panels.id,
+          room: panels.room,
+          kind: panels.kind,
+          authorLevel: panels.authorLevel,
+          rating: panels.rating,
+          headline: panels.headline,
+          body: panels.body,
+          spoilerGrade: panels.spoilerGrade,
+          createdAt: panels.createdAt,
+          userId: panels.userId,
+          authorName: users.displayName,
+          authorUsername: users.username,
+          authorGlyph: users.avatarGlyph,
+          score: sql<number>`(select coalesce(sum(v.value), 0)::int from panel_votes v where v.panel_id = ${panels.id})`,
+        })
+        .from(panels)
+        .innerJoin(users, eq(users.id, panels.userId))
+        .where(eq(panels.titleId, title.id))
+        .orderBy(desc(panels.createdAt));
+
+      if (user) {
+        const savedRows = await db
+          .select({ status: watchlist.status })
+          .from(watchlist)
+          .where(and(eq(watchlist.userId, user.id), eq(watchlist.titleId, title.id)))
+          .limit(1);
+        savedStatus = savedRows[0]?.status ?? null;
+      }
+
+      similar = await db
+        .select()
+        .from(titles)
+        .where(
+          and(
+            ne(titles.id, title.id),
+            or(
+              eq(titles.format, title.format),
+              ...title.genres.map((genre: string) => sql`${titles.genres} @> ${JSON.stringify([genre])}::jsonb`),
+            ),
+          ),
+        )
+        .orderBy(desc(titles.popularity))
+        .limit(4);
+    }
+  } catch (err) {
+    console.warn("Title page DB query fallback:", err);
+  }
+
+  // Fallback to static seed data if DB is unavailable
+  if (!title) {
+    title = seedTitles.find((t) => t.slug === slug);
+    if (!title) notFound();
+
+    const staticNodes = seedNodes[slug] ?? [];
+    treeNodes = staticNodes.map((row) => ({
+      key: row.nodeKey,
+      parentKey: row.parentKey,
+      label: row.label,
+      kind: row.kind,
+      year: row.year,
+      releaseOrder: row.releaseOrder,
+      chronoOrder: row.chronoOrder,
+      units: row.units,
+      unit: row.unit,
+      rating: row.rating,
+      power: row.powerLevel,
+      priority: row.priority,
+      canon: row.canon,
+      creator: row.creator,
+      blurb: row.blurb,
+      mild: row.mildNote && mildOk ? row.mildNote : null,
+      mildLocked: Boolean(row.mildNote) && !mildOk,
+      heavy: row.heavyNote && heavyOk ? row.heavyNote : null,
+      heavyLocked: Boolean(row.heavyNote) && !heavyOk,
+      powerNote: row.powerNote && heavyOk ? row.powerNote : null,
+    }));
+
+    const basePanels = seedPanels
+      .filter((p) => p.titleSlug === slug)
+      .map((p, i) => ({
+        id: i + 1,
+        room: "lounge" as const,
+        kind: p.kind,
+        authorLevel: p.authorLevel,
+        rating: p.rating,
+        headline: p.headline,
+        body: p.body,
+        spoilerGrade: "none" as const,
+        createdAt: new Date(),
+        userId: 1,
+        authorName: p.username,
+        authorUsername: p.username,
+        authorGlyph: "Z",
+        score: 4,
+      }));
+
+    const openPanels = seedOpenPanels
+      .filter((p) => p.titleSlug === slug)
+      .map((p, i) => ({
+        id: 100 + i,
+        room: p.room,
+        kind: p.kind,
+        authorLevel: p.authorLevel,
+        rating: p.rating,
+        headline: p.headline,
+        body: p.body,
+        spoilerGrade: p.grade,
+        createdAt: new Date(),
+        userId: 2,
+        authorName: p.username,
+        authorUsername: p.username,
+        authorGlyph: "K",
+        score: 6,
+      }));
+
+    panelRows = [...basePanels, ...openPanels];
+    similar = seedTitles
+      .filter((t) => t.slug !== slug && t.format === title.format)
+      .slice(0, 4);
+  }
+
+  if (!title) notFound();
 
   const openTotal = panelRows.filter((row) => row.room === "open").length;
   // Beginners with spoilers hidden never receive Open Floor content at all.
@@ -131,30 +255,6 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
       mine: user ? row.userId === user.id : false,
     };
   });
-
-  const savedRows = user
-    ? await db
-        .select({ status: watchlist.status })
-        .from(watchlist)
-        .where(and(eq(watchlist.userId, user.id), eq(watchlist.titleId, title.id)))
-        .limit(1)
-    : [];
-  const savedStatus = savedRows[0]?.status ?? null;
-
-  const similar = await db
-    .select()
-    .from(titles)
-    .where(
-      and(
-        ne(titles.id, title.id),
-        or(
-          eq(titles.format, title.format),
-          ...title.genres.map((genre) => sql`${titles.genres} @> ${JSON.stringify([genre])}::jsonb`),
-        ),
-      ),
-    )
-    .orderBy(desc(titles.popularity))
-    .limit(4);
 
   const communityScore =
     panelRows.length > 0 ? panelRows.reduce((sum, row) => sum + row.rating, 0) / panelRows.length : 0;
@@ -262,7 +362,7 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {title.genres.map((genre) => (
+              {title.genres.map((genre: string) => (
                 <Link
                   key={genre}
                   href={`/library?genre=${encodeURIComponent(genre)}`}
@@ -398,7 +498,7 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
             )}
 
             <div className="mt-7 flex flex-wrap gap-2">
-              {title.themes.map((theme) => (
+              {title.themes.map((theme: string) => (
                 <span
                   key={theme}
                   className="mono border border-dashed border-paper/25 px-2.5 py-1.5 text-[9px] text-mute"

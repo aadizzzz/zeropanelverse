@@ -57,40 +57,97 @@ export default async function PanelsPage({
   // Beginners with spoilers hidden never receive Open Floor entries.
   if (!openAccess) conditions.push(eq(panels.room, "lounge"));
 
-  const rows = await db
-    .select({
-      id: panels.id,
-      room: panels.room,
-      headline: panels.headline,
-      body: panels.body,
-      kind: panels.kind,
-      rating: panels.rating,
-      authorLevel: panels.authorLevel,
-      spoilerGrade: panels.spoilerGrade,
-      createdAt: panels.createdAt,
-      slug: titles.slug,
-      titleName: titles.name,
-      accent: titles.accent,
-      texture: titles.texture,
-      authorName: users.displayName,
-      authorUsername: users.username,
-      authorGlyph: users.avatarGlyph,
-    })
-    .from(panels)
-    .innerJoin(titles, eq(titles.id, panels.titleId))
-    .innerJoin(users, eq(users.id, panels.userId))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(panels.createdAt))
-    .limit(60);
+  let rows: any[] = [];
+  let hiddenOpen = 0;
 
-  const hiddenOpen = !openAccess
-    ? (
-        await db
-          .select({ id: panels.id })
-          .from(panels)
-          .where(eq(panels.room, "open"))
-      ).length
-    : 0;
+  try {
+    rows = await db
+      .select({
+        id: panels.id,
+        room: panels.room,
+        headline: panels.headline,
+        body: panels.body,
+        kind: panels.kind,
+        rating: panels.rating,
+        authorLevel: panels.authorLevel,
+        spoilerGrade: panels.spoilerGrade,
+        createdAt: panels.createdAt,
+        slug: titles.slug,
+        titleName: titles.name,
+        accent: titles.accent,
+        texture: titles.texture,
+        authorName: users.displayName,
+        authorUsername: users.username,
+        authorGlyph: users.avatarGlyph,
+      })
+      .from(panels)
+      .innerJoin(titles, eq(titles.id, panels.titleId))
+      .innerJoin(users, eq(users.id, panels.userId))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(panels.createdAt))
+      .limit(60);
+
+    hiddenOpen = !openAccess
+      ? (
+          await db
+            .select({ id: panels.id })
+            .from(panels)
+            .where(eq(panels.room, "open"))
+        ).length
+      : 0;
+  } catch (err) {
+    const { seedPanels, seedTitles } = await import("@/lib/seed-data");
+    const { seedOpenPanels } = await import("@/lib/seed-franchise");
+    const combined = [
+      ...seedPanels.map((p, i) => ({
+        id: i + 1,
+        room: "lounge" as const,
+        headline: p.headline,
+        body: p.body,
+        kind: p.kind,
+        rating: p.rating,
+        authorLevel: p.authorLevel,
+        spoilerGrade: "none" as const,
+        createdAt: new Date(),
+        slug: p.titleSlug,
+        authorUsername: p.username,
+      })),
+      ...seedOpenPanels.map((p, i) => ({
+        id: 100 + i,
+        room: p.room,
+        headline: p.headline,
+        body: p.body,
+        kind: p.kind,
+        rating: p.rating,
+        authorLevel: p.authorLevel,
+        spoilerGrade: p.grade,
+        createdAt: new Date(),
+        slug: p.titleSlug,
+        authorUsername: p.username,
+      })),
+    ];
+
+    rows = combined
+      .filter((p) => {
+        if (kind !== "all" && p.kind !== kind) return false;
+        if (room !== "all" && p.room !== room) return false;
+        if (!openAccess && p.room !== "lounge") return false;
+        return true;
+      })
+      .map((p) => {
+        const t = seedTitles.find((st) => st.slug === p.slug);
+        return {
+          ...p,
+          titleName: t?.name ?? p.slug,
+          accent: t?.accent ?? "#ffffff",
+          texture: t?.texture ?? "halftone",
+          authorName: p.authorUsername,
+          authorGlyph: p.authorUsername[0]?.toUpperCase() ?? "Z",
+        };
+      });
+
+    hiddenOpen = !openAccess ? seedOpenPanels.length : 0;
+  }
 
   const href = (nextKind: string, nextRoom: string) => {
     const query = new URLSearchParams();

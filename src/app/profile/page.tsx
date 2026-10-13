@@ -24,42 +24,51 @@ export default async function ProfilePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [list, myPanels, totals] = await Promise.all([
-    db
-      .select({
-        status: watchlist.status,
-        id: titles.id,
-        slug: titles.slug,
-        name: titles.name,
-        glyph: titles.glyph,
-        format: titles.format,
-        accent: titles.accent,
-        accentSoft: titles.accentSoft,
-        texture: titles.texture,
-        year: titles.year,
-        rating: titles.rating,
-      })
-      .from(watchlist)
-      .innerJoin(titles, eq(titles.id, watchlist.titleId))
-      .where(eq(watchlist.userId, user.id))
-      .orderBy(desc(watchlist.createdAt)),
-    db
-      .select({
-        id: panels.id,
-        headline: panels.headline,
-        kind: panels.kind,
-        rating: panels.rating,
-        createdAt: panels.createdAt,
-        titleName: titles.name,
-        slug: titles.slug,
-        accent: titles.accent,
-      })
-      .from(panels)
-      .innerJoin(titles, eq(titles.id, panels.titleId))
-      .where(eq(panels.userId, user.id))
-      .orderBy(desc(panels.createdAt)),
-    db.select({ count: sql<number>`count(*)::int` }).from(watchlist).where(eq(watchlist.userId, user.id)),
-  ]);
+  let list: any[] = [];
+  let myPanels: any[] = [];
+  let totals: { count: number }[] = [{ count: 0 }];
+
+  try {
+    const res = await Promise.all([
+      db
+        .select({
+          status: watchlist.status,
+          id: titles.id,
+          slug: titles.slug,
+          name: titles.name,
+          glyph: titles.glyph,
+          format: titles.format,
+          accent: titles.accent,
+          accentSoft: titles.accentSoft,
+          texture: titles.texture,
+          year: titles.year,
+          rating: titles.rating,
+        })
+        .from(watchlist)
+        .innerJoin(titles, eq(titles.id, watchlist.titleId))
+        .where(eq(watchlist.userId, user.id))
+        .orderBy(desc(watchlist.createdAt)),
+      db
+        .select({
+          id: panels.id,
+          headline: panels.headline,
+          kind: panels.kind,
+          rating: panels.rating,
+          createdAt: panels.createdAt,
+          titleName: titles.name,
+          slug: titles.slug,
+          accent: titles.accent,
+        })
+        .from(panels)
+        .innerJoin(titles, eq(titles.id, panels.titleId))
+        .where(eq(panels.userId, user.id))
+        .orderBy(desc(panels.createdAt)),
+      db.select({ count: sql<number>`count(*)::int` }).from(watchlist).where(eq(watchlist.userId, user.id)),
+    ]);
+    [list, myPanels, totals] = res;
+  } catch (err) {
+    console.warn("Profile query error:", err);
+  }
 
   const grouped = (["watching", "planned", "finished"] as const).map((status) => ({
     status,

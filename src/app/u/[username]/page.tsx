@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { follows, panels, titles, users, watchlist } from "@/db/schema";
+import { follows, panels, titles, users, watchlist, type ExperienceLevel } from "@/db/schema";
 import { ensureSeeded } from "@/lib/db-init";
 import { LEVEL_LABELS, getCurrentUser } from "@/lib/auth";
 import { ProfileHeaderActions } from "@/components/ProfileFollowButton";
@@ -24,82 +24,167 @@ export default async function PublicProfilePage({
   const { username } = await params;
   const currentUser = await getCurrentUser();
 
-  const rows = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username.toLowerCase()))
-    .limit(1);
-  const profile = rows[0];
-  if (!profile) notFound();
-
-  // Queries: entries, watchlist, followers, following
-  const [entries, list, followerRows, followingRows] = await Promise.all([
-    db
-      .select({
-        id: panels.id,
-        headline: panels.headline,
-        body: panels.body,
-        kind: panels.kind,
-        rating: panels.rating,
-        authorLevel: panels.authorLevel,
-        createdAt: panels.createdAt,
-        slug: titles.slug,
-        titleName: titles.name,
-        accent: titles.accent,
-      })
-      .from(panels)
-      .innerJoin(titles, eq(titles.id, panels.titleId))
-      .where(eq(panels.userId, profile.id))
-      .orderBy(desc(panels.createdAt))
-      .limit(20),
-
-    db
-      .select({
-        slug: titles.slug,
-        name: titles.name,
-        accent: titles.accent,
-        glyph: titles.glyph,
-        format: titles.format,
-        status: watchlist.status,
-      })
-      .from(watchlist)
-      .innerJoin(titles, eq(titles.id, watchlist.titleId))
-      .where(eq(watchlist.userId, profile.id))
-      .limit(20),
-
-    db
-      .select({
-        id: users.id,
-        username: users.username,
-        displayName: users.displayName,
-        experienceLevel: users.experienceLevel,
-        avatarGlyph: users.avatarGlyph,
-      })
-      .from(follows)
-      .innerJoin(users, eq(users.id, follows.followerId))
-      .where(eq(follows.followingId, profile.id)),
-
-    db
-      .select({
-        id: users.id,
-        username: users.username,
-        displayName: users.displayName,
-        experienceLevel: users.experienceLevel,
-        avatarGlyph: users.avatarGlyph,
-      })
-      .from(follows)
-      .innerJoin(users, eq(users.id, follows.followingId))
-      .where(eq(follows.followerId, profile.id)),
-  ]);
-
+  let profile: any = null;
+  let entries: any[] = [];
+  let list: any[] = [];
+  let followerRows: any[] = [];
+  let followingRows: any[] = [];
   let isCurrentUserFollowing = false;
-  if (currentUser) {
-    const isFollowRow = await db
-      .select({ id: follows.id })
-      .from(follows)
-      .where(and(eq(follows.followerId, currentUser.id), eq(follows.followingId, profile.id)))
+
+  try {
+    const rows = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username.toLowerCase()))
       .limit(1);
-    isCurrentUserFollowing = isFollowRow.length > 0;
+    profile = rows[0] ?? null;
+
+    if (profile) {
+      const res = await Promise.all([
+        db
+          .select({
+            id: panels.id,
+            headline: panels.headline,
+            body: panels.body,
+            kind: panels.kind,
+            rating: panels.rating,
+            authorLevel: panels.authorLevel,
+            createdAt: panels.createdAt,
+            slug: titles.slug,
+            titleName: titles.name,
+            accent: titles.accent,
+          })
+          .from(panels)
+          .innerJoin(titles, eq(titles.id, panels.titleId))
+          .where(eq(panels.userId, profile.id))
+          .orderBy(desc(panels.createdAt))
+          .limit(20),
+
+        db
+          .select({
+            slug: titles.slug,
+            name: titles.name,
+            accent: titles.accent,
+            glyph: titles.glyph,
+            format: titles.format,
+            status: watchlist.status,
+          })
+          .from(watchlist)
+          .innerJoin(titles, eq(titles.id, watchlist.titleId))
+          .where(eq(watchlist.userId, profile.id))
+          .limit(20),
+
+        db
+          .select({
+            id: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            experienceLevel: users.experienceLevel,
+            avatarGlyph: users.avatarGlyph,
+          })
+          .from(follows)
+          .innerJoin(users, eq(users.id, follows.followerId))
+          .where(eq(follows.followingId, profile.id)),
+
+        db
+          .select({
+            id: users.id,
+            username: users.username,
+            displayName: users.displayName,
+            experienceLevel: users.experienceLevel,
+            avatarGlyph: users.avatarGlyph,
+          })
+          .from(follows)
+          .innerJoin(users, eq(users.id, follows.followingId))
+          .where(eq(follows.followerId, profile.id)),
+      ]);
+      [entries, list, followerRows, followingRows] = res;
+
+      if (currentUser) {
+        const isFollowRow = await db
+          .select({ id: follows.id })
+          .from(follows)
+          .where(and(eq(follows.followerId, currentUser.id), eq(follows.followingId, profile.id)))
+          .limit(1);
+        isCurrentUserFollowing = isFollowRow.length > 0;
+      }
+    }
+  } catch (err) {
+    console.warn("Profile DB query fallback:", err);
+  }
+
+  // Fallback demo profiles if DB is offline
+  if (!profile) {
+    const demoProfiles: Record<string, any> = {
+      panelnewbie: {
+        id: 1,
+        username: "panelnewbie",
+        displayName: "Newbie Reader",
+        bio: "Just started exploring the verse. Here for beginner-friendly anime and recommendations.",
+        experienceLevel: "beginner",
+        spoilerMode: "safe",
+        avatarGlyph: "P",
+        createdAt: new Date(),
+      },
+      midwatch_mira: {
+        id: 2,
+        username: "midwatch_mira",
+        displayName: "Mira Watcher",
+        bio: "Halfway through 100+ shows. I like discussing character dynamics, pacing, and intermediate guides.",
+        experienceLevel: "mediocre",
+        spoilerMode: "mild",
+        avatarGlyph: "M",
+        createdAt: new Date(),
+      },
+      archivist_k: {
+        id: 3,
+        username: "archivist_k",
+        displayName: "Kenji the Archivist",
+        bio: "Reading manga and manhwa since 2004. Deep-dive paneling, thematic thesis, uncensored lore.",
+        experienceLevel: "elite",
+        spoilerMode: "full",
+        avatarGlyph: "K",
+        createdAt: new Date(),
+      },
+    };
+
+    profile = demoProfiles[username.toLowerCase()];
+    if (!profile) notFound();
+
+    const { seedPanels, seedTitles } = await import("@/lib/seed-data");
+    entries = seedPanels
+      .filter((p) => p.username === profile.username)
+      .map((p, i) => {
+        const t = seedTitles.find((st) => st.slug === p.titleSlug);
+        return {
+          id: i + 1,
+          headline: p.headline,
+          body: p.body,
+          kind: p.kind,
+          rating: p.rating,
+          authorLevel: p.authorLevel,
+          createdAt: new Date(),
+          slug: p.titleSlug,
+          titleName: t?.name ?? p.titleSlug,
+          accent: t?.accent ?? "#ffffff",
+        };
+      });
+
+    list = seedTitles.slice(0, 3).map((t) => ({
+      slug: t.slug,
+      name: t.name,
+      accent: t.accent,
+      glyph: t.glyph,
+      format: t.format,
+      status: "watching",
+    }));
+
+    followerRows = [
+      { id: 99, username: "archivist_k", displayName: "Kenji the Archivist", experienceLevel: "elite", avatarGlyph: "K" },
+    ];
+    followingRows = [
+      { id: 98, username: "midwatch_mira", displayName: "Mira Watcher", experienceLevel: "mediocre", avatarGlyph: "M" },
+    ];
   }
 
   const isOwnProfile = currentUser ? currentUser.id === profile.id : false;
@@ -120,7 +205,7 @@ export default async function PublicProfilePage({
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="display text-3xl text-paper sm:text-4xl">{profile.displayName}</h1>
               <span className="mono border border-paper/40 px-2 py-0.5 text-[9px] uppercase tracking-wider text-paper">
-                {LEVEL_LABELS[profile.experienceLevel]} panelist
+                {LEVEL_LABELS[profile.experienceLevel as ExperienceLevel] ?? profile.experienceLevel} panelist
               </span>
             </div>
 

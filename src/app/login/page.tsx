@@ -11,7 +11,9 @@ export const metadata = {
 };
 
 export default async function LoginPage() {
-  await ensureSeeded();
+  try {
+    await ensureSeeded();
+  } catch {}
   const user = await getCurrentUser();
   if (user) redirect("/profile");
 

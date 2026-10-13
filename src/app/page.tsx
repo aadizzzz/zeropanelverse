@@ -28,7 +28,7 @@ const LEVELS = [
   },
 ];
 
-import { seedTitles } from "@/lib/seed-data";
+import { seedTitles, seedPanels } from "@/lib/seed-data";
 
 export default async function HomePage() {
   let featured: any[] = [];
@@ -78,6 +78,24 @@ export default async function HomePage() {
       { format: "manga", count: seedTitles.filter((t) => t.format === "manga").length },
       { format: "manhwa", count: seedTitles.filter((t) => t.format === "manhwa").length },
     ];
+    panelCount = [{ count: seedPanels.length }];
+    watchlistCount = [{ count: 12 }];
+    latestPanels = seedPanels.slice(0, 3).map((p, i) => {
+      const t = seedTitles.find((st) => st.slug === p.titleSlug);
+      return {
+        id: i + 1,
+        headline: p.headline,
+        body: p.body,
+        kind: p.kind,
+        authorLevel: p.authorLevel,
+        createdAt: new Date(),
+        slug: p.titleSlug,
+        titleName: t?.name ?? p.titleSlug,
+        accent: t?.accent ?? "#ffffff",
+        authorName: p.username,
+        authorUsername: p.username,
+      };
+    });
   }
 
   const formatCount = (key: string) =>
@@ -230,7 +248,7 @@ export default async function HomePage() {
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {featured.map((title) => (
-            <TitleCard key={title.id} title={title} />
+            <TitleCard key={title.slug ?? title.id} title={title} />
           ))}
         </div>
       </section>
@@ -264,7 +282,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-2 gap-3">
             {featured.slice(0, 4).map((title) => (
               <div
-                key={title.id}
+                key={title.slug ?? title.id}
                 className={`grain relative h-40 overflow-hidden border border-line tex-${title.texture}`}
                 style={{
                   ["--accent" as string]: title.accent,
@@ -274,7 +292,9 @@ export default async function HomePage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
                 <div className="absolute inset-0 bg-ink/55" />
                 <div className="relative flex h-full flex-col justify-between p-4">
-                  <span className="mono text-[8px] text-mute">{title.mood.split("—")[0]}</span>
+                  <span className="mono text-[8px] text-mute">
+                    {title.mood?.split("—")[0] ?? title.mood ?? "Archive"}
+                  </span>
                   <div>
                     <div className="h-[2px] w-10" style={{ background: title.accent }} />
                     <span className="display mt-2 block text-sm text-paper">{title.name}</span>

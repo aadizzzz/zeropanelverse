@@ -72,15 +72,26 @@ export default async function MessagesPage({
     );
   }
 
-  const titleRows = await db
-    .select({
-      slug: titles.slug,
-      name: titles.name,
-      format: titles.format,
-      accent: titles.accent,
-    })
-    .from(titles)
-    .orderBy(asc(titles.name));
+  let titleRows: any[] = [];
+  try {
+    titleRows = await db
+      .select({
+        slug: titles.slug,
+        name: titles.name,
+        format: titles.format,
+        accent: titles.accent,
+      })
+      .from(titles)
+      .orderBy(asc(titles.name));
+  } catch {
+    const { seedTitles } = await import("@/lib/seed-data");
+    titleRows = seedTitles.map((t) => ({
+      slug: t.slug,
+      name: t.name,
+      format: t.format,
+      accent: t.accent,
+    }));
+  }
 
   return (
     <Messenger
