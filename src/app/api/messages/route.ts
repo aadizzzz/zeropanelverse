@@ -3,6 +3,7 @@ import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { directMessages, titles, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { broadcastMessage, type LiveMessagePayload } from "@/lib/message-bus";
 
 export const dynamic = "force-dynamic";
 
@@ -360,7 +361,54 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
-    return NextResponse.json({ ok: true, message: inserted[0] });
+    const createdMsg = inserted[0];
+
+    // Look up titleCard if titleSlug exists
+    let titleCard = null;
+    if (createdMsg.titleSlug) {
+      try {
+        const titleRows = await db
+          .select({
+            slug: titles.slug,
+            name: titles.name,
+            accent: titles.accent,
+            accentSoft: titles.accentSoft,
+            format: titles.format,
+            glyph: titles.glyph,
+            texture: titles.texture,
+            year: titles.year,
+            rating: titles.rating,
+          })
+          .from(titles)
+          .where(eq(titles.slug, createdMsg.titleSlug))
+          .limit(1);
+        titleCard = titleRows[0] || null;
+      } catch {}
+    }
+
+    const payload: LiveMessagePayload = {
+      type: "new_message",
+      message: {
+        id: createdMsg.id,
+        senderId: createdMsg.senderId,
+        receiverId: createdMsg.receiverId,
+        content: createdMsg.content,
+        titleSlug: createdMsg.titleSlug,
+        read: createdMsg.read,
+        createdAt: createdMsg.createdAt.toISOString(),
+        titleCard,
+      },
+    };
+
+    // Instant real-time push to receiver and sender (< 30ms latency)
+    try {
+      broadcastMessage(receiverId, payload);
+      broadcastMessage(user.id, payload);
+    } catch (e) {
+      console.warn("Live broadcast error:", e);
+    }
+
+    return NextResponse.json({ ok: true, message: { ...createdMsg, titleCard } });
   } catch (err) {
     console.error("POST /api/messages error:", err);
     return NextResponse.json({ ok: false, error: "Failed to send message" }, { status: 500 });

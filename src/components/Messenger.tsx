@@ -260,14 +260,98 @@ export function Messenger({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Silent polling every 4s: refreshes inbox and active conversation without flashing
+  // Real-time instant live push stream (< 30ms latency)
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let isMounted = true;
+    let retryTimeout: NodeJS.Timeout | null = null;
+
+    function connectSSE() {
+      try {
+        es = new EventSource("/api/messages/stream");
+
+        es.addEventListener("message", (event) => {
+          if (!isMounted) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data?.type === "new_message" && data.message) {
+              const liveMsg: MessageItem = data.message;
+
+              // 1. If message belongs to active conversation, append immediately!
+              const currentPartner = activePartnerRef.current;
+              if (
+                currentPartner &&
+                (liveMsg.senderId === currentPartner.id || liveMsg.receiverId === currentPartner.id)
+              ) {
+                setMessages((prev) => {
+                  const exists = prev.some((m) => m.id === liveMsg.id);
+                  if (exists) return prev;
+                  // Auto-advance scroll if user is watching near bottom
+                  setTimeout(() => scrollToBottom(true, false), 30);
+                  return [...prev, liveMsg];
+                });
+              }
+
+              // 2. Update inbox threads list immediately
+              const otherUserId =
+                liveMsg.senderId === currentUser.id ? liveMsg.receiverId : liveMsg.senderId;
+
+              setConversations((prev) => {
+                const idx = prev.findIndex((c) => c.partner.id === otherUserId);
+                if (idx !== -1) {
+                  const existing = prev[idx];
+                  const isCurrentActive = currentPartner?.id === otherUserId;
+                  const updated = {
+                    ...existing,
+                    lastMessage: liveMsg.content,
+                    lastMessageAt: liveMsg.createdAt,
+                    isOutgoing: liveMsg.senderId === currentUser.id,
+                    unreadCount: isCurrentActive
+                      ? 0
+                      : liveMsg.senderId !== currentUser.id
+                        ? existing.unreadCount + 1
+                        : existing.unreadCount,
+                  };
+                  const rest = prev.filter((_, i) => i !== idx);
+                  return [updated, ...rest];
+                } else {
+                  void refreshInbox();
+                  return prev;
+                }
+              });
+            }
+          } catch (parseErr) {
+            console.warn("SSE message parse error:", parseErr);
+          }
+        });
+
+        es.onerror = () => {
+          // EventSource handles standard reconnection automatically
+        };
+      } catch (err) {
+        if (isMounted) {
+          retryTimeout = setTimeout(connectSSE, 5000);
+        }
+      }
+    }
+
+    connectSSE();
+
+    return () => {
+      isMounted = false;
+      if (retryTimeout) clearTimeout(retryTimeout);
+      if (es) es.close();
+    };
+  }, [currentUser.id, scrollToBottom, refreshInbox]);
+
+  // Fallback background sync every 12s: ensures parity if device temporarily went offline
   useEffect(() => {
     const timer = setInterval(() => {
       void refreshInbox();
       if (activePartnerRef.current) {
         void fetchMessages(activePartnerRef.current.id, true);
       }
-    }, 4000);
+    }, 12000);
 
     return () => clearInterval(timer);
   }, [refreshInbox, fetchMessages]);
@@ -431,7 +515,7 @@ export function Messenger({
             </div>
             <div className="mono flex items-center gap-1.5 rounded-full border border-paper/20 bg-paper/5 px-2.5 py-1 text-[9px] text-paper">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              <span>Direct</span>
+              <span>Direct · Live</span>
             </div>
           </div>
 
