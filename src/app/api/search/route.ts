@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { follows, panels, titles, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureSeeded } from "@/lib/db-init";
+import { searchAniList, cacheAniListTitle } from "@/lib/anilist";
 
 export const dynamic = "force-dynamic";
 
@@ -49,11 +50,51 @@ export async function GET(request: Request) {
           glyph: titles.glyph,
           studio: titles.studio,
           tagline: titles.tagline,
+          posterUrl: titles.posterUrl,
         })
         .from(titles)
         .where(titleSearch)
         .orderBy(desc(titles.popularity))
         .limit(limit);
+
+      // If local DB has fewer results than requested, query AniList to find ANY anime/manga/manhwa in existence
+      if (matchedTitles.length < limit) {
+        try {
+          const anilistResults = await searchAniList({
+            q,
+            perPage: Math.min(10, limit - matchedTitles.length),
+          });
+
+          for (const item of anilistResults) {
+            const cached = await cacheAniListTitle(item);
+            if (
+              cached &&
+              !matchedTitles.some(
+                (t) => t.id === cached.id || t.slug === cached.slug || t.name.toLowerCase() === cached.name.toLowerCase(),
+              )
+            ) {
+              matchedTitles.push({
+                id: cached.id,
+                slug: cached.slug,
+                name: cached.name,
+                altName: cached.altName,
+                format: cached.format,
+                year: cached.year,
+                rating: cached.rating,
+                genres: cached.genres,
+                accent: cached.accent,
+                accentSoft: cached.accentSoft,
+                glyph: cached.glyph,
+                studio: cached.studio,
+                tagline: cached.tagline,
+                posterUrl: cached.posterUrl,
+              });
+            }
+          }
+        } catch (apiErr) {
+          console.warn("AniList search augmentation error:", apiErr);
+        }
+      }
     } else if (shouldSearchTitles && !q && type === "titles") {
       matchedTitles = await db
         .select({
@@ -70,6 +111,7 @@ export async function GET(request: Request) {
           glyph: titles.glyph,
           studio: titles.studio,
           tagline: titles.tagline,
+          posterUrl: titles.posterUrl,
         })
         .from(titles)
         .orderBy(desc(titles.popularity))

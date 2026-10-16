@@ -23,31 +23,95 @@ import { WatchlistControls } from "@/components/WatchlistControls";
 import { TitleCard } from "@/components/TitleCard";
 import { FranchiseTree, type TreeNodeData } from "@/components/FranchiseTree";
 
+import type { Metadata } from "next";
 import { seedTitles, seedPanels } from "@/lib/seed-data";
 import { seedNodes, seedOpenPanels } from "@/lib/seed-franchise";
+import { SITE_URL, generateTitleSchema, generateBreadcrumbSchema } from "@/lib/seo";
+import { fetchAniListByQuery, cacheAniListTitle } from "@/lib/anilist";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const { slug } = await params;
+  let title: any = null;
   try {
     const rows = await db.select().from(titles).where(eq(titles.slug, slug)).limit(1);
-    const title = rows[0];
-    if (title) {
-      return {
-        title: `${title.name} — ZeroPanelVerse`,
-        description: title.synopsis.slice(0, 180),
-      };
-    }
+    title = rows[0] ?? null;
   } catch {}
-  const fallback = seedTitles.find((t) => t.slug === slug);
-  if (fallback) {
+  if (!title) {
+    title = seedTitles.find((t) => t.slug === slug);
+  }
+
+  // Dynamic lookup via AniList if not in seed data
+  if (!title) {
+    try {
+      const cleanSearch = slug.replace(/-\d+$/, "").replace(/-/g, " ");
+      const anilistMedia = await fetchAniListByQuery(cleanSearch);
+      if (anilistMedia) {
+        title = await cacheAniListTitle(anilistMedia);
+      }
+    } catch {}
+  }
+
+  if (!title) {
     return {
-      title: `${fallback.name} — ZeroPanelVerse`,
-      description: fallback.synopsis.slice(0, 180),
+      title: "Title Not Found — ZeroPanelVerse",
+      description:
+        "The requested anime, manga or manhwa entry was not found in the ZeroPanelVerse archive.",
     };
   }
-  return { title: "Panel not found — ZeroPanelVerse" };
+
+  const formatUpper = title.format ? title.format.toUpperCase() : "ANIME";
+  const pageTitle = `${title.name} (${title.year}) — Watch Order, Guide & Review`;
+  const cleanDescription = (title.synopsis || "").slice(0, 155).trim() + "...";
+  const canonicalUrl = `${SITE_URL}/title/${slug}`;
+  const posterUrl = title.posterUrl || `${SITE_URL}/posters/${slug}.jpg`;
+  const keywords = [
+    title.name,
+    title.altName,
+    `${title.name} watch order`,
+    `${title.name} reading order`,
+    `${title.name} guide`,
+    `${title.name} review`,
+    `${title.name} timeline`,
+    `${title.name} ${title.format}`,
+    ...(title.genres || []),
+    ...(title.themes || []),
+    title.studio,
+  ].filter(Boolean);
+
+  return {
+    title: pageTitle,
+    description: cleanDescription,
+    keywords,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${title.name} (${title.year}) — ${formatUpper} Guide & Community Reviews`,
+      description: cleanDescription,
+      url: canonicalUrl,
+      type: "website",
+      images: [
+        {
+          url: posterUrl,
+          width: 600,
+          height: 900,
+          alt: `${title.name} Poster Artwork`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title.name} (${title.year}) — ${formatUpper} Guide`,
+      description: cleanDescription,
+      images: [posterUrl],
+    },
+  };
 }
 
 export default async function TitlePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -152,13 +216,58 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
     console.warn("Title page DB query fallback:", err);
   }
 
-  // Fallback to static seed data if DB is unavailable
+  // Fallback to static seed data or AniList dynamic universe
   if (!title) {
     title = seedTitles.find((t) => t.slug === slug);
+
+    if (!title) {
+      try {
+        const cleanSearch = slug.replace(/-\d+$/, "").replace(/-/g, " ");
+        const anilistMedia = await fetchAniListByQuery(cleanSearch);
+        if (anilistMedia) {
+          title = await cacheAniListTitle(anilistMedia);
+          if (title) {
+            // Load nodes created for this new title
+            const nodeRows = await db
+              .select()
+              .from(titleNodes)
+              .where(eq(titleNodes.titleId, title.id))
+              .orderBy(asc(titleNodes.releaseOrder));
+
+            treeNodes = nodeRows.map((row) => ({
+              key: row.nodeKey,
+              parentKey: row.parentKey,
+              label: row.label,
+              kind: row.kind,
+              year: row.year,
+              releaseOrder: row.releaseOrder,
+              chronoOrder: row.chronoOrder,
+              units: row.units,
+              unit: row.unit,
+              rating: row.rating,
+              power: row.powerLevel,
+              priority: row.priority,
+              canon: row.canon,
+              creator: row.creator,
+              blurb: row.blurb,
+              mild: row.mildNote && mildOk ? row.mildNote : null,
+              mildLocked: Boolean(row.mildNote) && !mildOk,
+              heavy: row.heavyNote && heavyOk ? row.heavyNote : null,
+              heavyLocked: Boolean(row.heavyNote) && !heavyOk,
+              powerNote: row.powerNote && heavyOk ? row.powerNote : null,
+            }));
+          }
+        }
+      } catch (dynamicErr) {
+        console.warn("AniList dynamic title fetch error:", dynamicErr);
+      }
+    }
+
     if (!title) notFound();
 
-    const staticNodes = seedNodes[slug] ?? [];
-    treeNodes = staticNodes.map((row) => ({
+    if (treeNodes.length === 0) {
+      const staticNodes = seedNodes[slug] ?? [];
+      treeNodes = staticNodes.map((row) => ({
       key: row.nodeKey,
       parentKey: row.parentKey,
       label: row.label,
@@ -180,6 +289,7 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
       heavyLocked: Boolean(row.heavyNote) && !heavyOk,
       powerNote: row.powerNote && heavyOk ? row.powerNote : null,
     }));
+  }
 
     const basePanels = seedPanels
       .filter((p) => p.titleSlug === slug)
@@ -298,6 +408,13 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
     ["Age rating", title.ageRating],
   ];
 
+  const titleSchema = generateTitleSchema(title);
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Library", path: `/library?format=${title.format}` },
+    { name: title.name, path: `/title/${title.slug}` },
+  ]);
+
   return (
     <div
       style={{
@@ -305,6 +422,16 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
         ["--accent-soft" as string]: title.accentSoft,
       }}
     >
+      {/* Schema.org Rich Snippet Structured Data for Google Search */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(titleSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+
       {/* ---------------- cinematic header ---------------- */}
       <section className="relative overflow-hidden border-b border-line">
         <div className={`absolute inset-0 tex-${title.texture} opacity-45`} />
@@ -321,6 +448,7 @@ export default async function TitlePage({ params }: { params: Promise<{ slug: st
             accentSoft={title.accentSoft}
             texture={title.texture}
             year={title.year}
+            posterUrl={title.posterUrl}
             className="w-full max-w-[300px] aspect-[3/4]"
           />
 

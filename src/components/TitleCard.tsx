@@ -18,6 +18,7 @@ export function TitleCard({ title }: { title: TitleRow }) {
         accentSoft={title.accentSoft}
         texture={title.texture}
         year={title.year}
+        posterUrl={title.posterUrl}
         className="aspect-[3/4] w-full border-0 border-b border-line"
       />
       <div className="flex flex-1 flex-col gap-3 p-4">

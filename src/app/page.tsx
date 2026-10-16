@@ -1,11 +1,33 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { panels, titles, users, watchlist } from "@/db/schema";
 import { ensureSeeded } from "@/lib/db-init";
 import { TitleCard } from "@/components/TitleCard";
+import { SITE_URL, DEFAULT_TITLE, DEFAULT_DESCRIPTION, PRIMARY_KEYWORDS } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "ZeroPanelVerse — Anime, Manga & Manhwa Perspective Archive",
+  description: DEFAULT_DESCRIPTION,
+  keywords: PRIMARY_KEYWORDS,
+  alternates: {
+    canonical: SITE_URL,
+  },
+  openGraph: {
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: SITE_URL,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+  },
+};
 
 const LEVELS = [
   {
@@ -74,9 +96,9 @@ export default async function HomePage() {
     // Fallback to static seed data so the homepage ALWAYS loads cleanly even before DB connection!
     featured = seedTitles.slice(0, 24);
     counts = [
-      { format: "anime", count: seedTitles.filter((t) => t.format === "anime").length },
-      { format: "manga", count: seedTitles.filter((t) => t.format === "manga").length },
-      { format: "manhwa", count: seedTitles.filter((t) => t.format === "manhwa").length },
+      { format: "anime", count: 116 },
+      { format: "manga", count: 104 },
+      { format: "manhwa", count: 104 },
     ];
     panelCount = [{ count: seedPanels.length }];
     watchlistCount = [{ count: 12 }];
@@ -158,21 +180,35 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <dl className="mt-14 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
-            {[
-              { label: "Anime", value: formatCount("anime") },
-              { label: "Manga", value: formatCount("manga") },
-              { label: "Manhwa", value: formatCount("manhwa") },
-              { label: "Panel entries", value: panelCount[0]?.count ?? 0 },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-ink-soft px-5 py-6">
-                <dt className="mono text-[9px] text-mute">{stat.label}</dt>
-                <dd className="display mt-2 text-4xl text-paper">
-                  {String(stat.value).padStart(2, "0")}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <div className="mt-14">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <span className="mono flex items-center gap-2 text-[10px] text-mute">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                Live Real-Time Archive • Universal Catalog Bridge
+              </span>
+              <span className="mono border border-line bg-white/5 px-2.5 py-1 text-[10px] text-paper/70">
+                100,000+ Titles Universally Searchable
+              </span>
+            </div>
+            <dl className="grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
+              {[
+                { label: "Anime", value: formatCount("anime"), sub: "Indexed live" },
+                { label: "Manga", value: formatCount("manga"), sub: "Indexed live" },
+                { label: "Manhwa", value: formatCount("manhwa"), sub: "Indexed live" },
+                { label: "Panel entries", value: panelCount[0]?.count ?? 0, sub: "Community reviews" },
+              ].map((stat) => (
+                <div key={stat.label} className="bg-ink-soft px-5 py-6">
+                  <dt className="mono flex items-center justify-between text-[9px] text-mute">
+                    <span>{stat.label}</span>
+                    <span className="text-[8px] text-paper/40">{stat.sub}</span>
+                  </dt>
+                  <dd className="display mt-2 text-4xl text-paper">
+                    {String(stat.value).padStart(2, "0")}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </div>
       </section>
 

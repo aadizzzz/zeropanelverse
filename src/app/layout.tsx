@@ -5,20 +5,91 @@ import { Nav } from "@/components/Nav";
 import { LensBar } from "@/components/LensBar";
 import { getCurrentUser } from "@/lib/auth";
 import { getLens } from "@/lib/lens";
+import {
+  SITE_URL,
+  SITE_NAME,
+  SITE_TITLE_TEMPLATE,
+  DEFAULT_TITLE,
+  DEFAULT_DESCRIPTION,
+  PRIMARY_KEYWORDS,
+  GOOGLE_SITE_VERIFICATION,
+  generateSiteSchema,
+} from "@/lib/seo";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ZeroPanelVerse — anime, manga & manhwa archive",
-  description:
-    "A monochrome archive of anime, manga and manhwa with guides for beginner, mediocre and elite audiences, per-title cinematic theming, and community panels.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: DEFAULT_TITLE,
+    template: SITE_TITLE_TEMPLATE,
+  },
+  description: DEFAULT_DESCRIPTION,
+  keywords: PRIMARY_KEYWORDS,
+  applicationName: SITE_NAME,
+  authors: [{ name: "ZeroPanelVerse Curators", url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "entertainment",
+  classification: "Anime, Manga and Manhwa Guides & Community",
+  alternates: {
+    canonical: "./",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    nocache: false,
+    googleBot: {
+      index: true,
+      follow: true,
+      noimageindex: false,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    creator: "@zeropanelverse",
+    site: "@zeropanelverse",
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/icon.svg",
+    shortcut: "/favicon.ico",
+  },
+  verification: GOOGLE_SITE_VERIFICATION
+    ? {
+        google: GOOGLE_SITE_VERIFICATION,
+      }
+    : undefined,
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   const lens = await getLens(user);
+  const siteSchema = generateSiteSchema();
 
   return (
     <html lang="en">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteSchema) }}
+        />
+      </head>
       <body className="min-h-screen bg-ink text-paper antialiased">
         <Nav user={user} />
         <LensBar lens={lens} signedIn={Boolean(user)} />

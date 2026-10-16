@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
@@ -65,6 +65,8 @@ export function Messenger({
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [allUsers, setAllUsers] = useState<PartnerInfo[]>([]);
+  const [serverSearchResults, setServerSearchResults] = useState<PartnerInfo[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [activePartner, setActivePartner] = useState<PartnerInfo | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState("");
@@ -89,17 +91,16 @@ export function Messenger({
 
   // Fetch messages with active partner (silent polling vs manual load)
   const fetchMessages = useCallback(
-    async (partnerId: number, isSilent = false) => {
+    async (partnerIdOrUsername: number | string, isSilent = false) => {
       if (!isSilent) setLoadingMessages(true);
       try {
-        const res = await fetch(`/api/messages?with=${partnerId}`);
+        const res = await fetch(`/api/messages?with=${encodeURIComponent(String(partnerIdOrUsername))}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.ok) {
           const newMsgs: MessageItem[] = data.messages || [];
 
           setMessages((prev) => {
-            // Check if identical to avoid flashing or re-renders
             if (
               prev.length === newMsgs.length &&
               prev.every((m, idx) => m.id === newMsgs[idx]?.id)
@@ -107,7 +108,6 @@ export function Messenger({
               return prev;
             }
 
-            // If new messages arrived, scroll smoothly
             if (newMsgs.length > prev.length) {
               setTimeout(() => scrollToBottom(true), 60);
             }
@@ -116,6 +116,10 @@ export function Messenger({
 
           if (data.partner) {
             setActivePartner((prev) => (prev?.id === data.partner.id ? prev : data.partner));
+            setAllUsers((prev) => {
+              const exists = prev.some((u) => u.id === data.partner.id);
+              return exists ? prev : [data.partner, ...prev];
+            });
           }
 
           if (!isSilent) {
@@ -139,7 +143,14 @@ export function Messenger({
       const data = await res.json();
       if (data.ok) {
         setConversations(data.conversations || []);
-        setAllUsers(data.allUsers || []);
+        if (Array.isArray(data.allUsers) && data.allUsers.length > 0) {
+          setAllUsers((prev) => {
+            const map = new Map<number, PartnerInfo>();
+            for (const u of data.allUsers) map.set(u.id, u);
+            for (const u of prev) map.set(u.id, u);
+            return Array.from(map.values());
+          });
+        }
       }
     } catch {
       // silent
@@ -159,12 +170,16 @@ export function Messenger({
           setAllUsers(data.allUsers || []);
 
           if (targetUsername) {
-            const found = (data.allUsers as PartnerInfo[]).find(
+            // First check if user is already in initial allUsers
+            const found = (data.allUsers as PartnerInfo[])?.find(
               (u) => u.username.toLowerCase() === targetUsername.toLowerCase(),
             );
             if (found) {
               setActivePartner(found);
               void fetchMessages(found.id, false);
+            } else {
+              // Direct server lookup by username
+              void fetchMessages(targetUsername, false);
             }
           }
         }
@@ -177,6 +192,52 @@ export function Messenger({
       ignore = true;
     };
   }, [targetUsername, fetchMessages]);
+
+  // Respond whenever URL ?with= changes (e.g. user selected someone from search modal)
+  useEffect(() => {
+    if (!targetUsername) return;
+    if (activePartnerRef.current?.username?.toLowerCase() === targetUsername.toLowerCase()) {
+      return;
+    }
+    const found = allUsers.find(
+      (u) => u.username.toLowerCase() === targetUsername.toLowerCase(),
+    );
+    if (found) {
+      setActivePartner(found);
+      void fetchMessages(found.id, false);
+    } else {
+      void fetchMessages(targetUsername, false);
+    }
+  }, [targetUsername, allUsers, fetchMessages]);
+
+  // Dynamic server search when typing in Messenger search box
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setServerSearchResults([]);
+      setIsSearchingUsers(false);
+      return;
+    }
+
+    setIsSearchingUsers(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/messages?search=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.users)) {
+            setServerSearchResults(data.users);
+          }
+        }
+      } catch {
+        // silent
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Silent polling every 4s: refreshes inbox and active conversation without flashing
   useEffect(() => {
@@ -194,13 +255,18 @@ export function Messenger({
   const selectPartner = (partner: PartnerInfo) => {
     setActivePartner(partner);
     setSearchQuery("");
+    setAllUsers((prev) => {
+      const exists = prev.some((u) => u.id === partner.id);
+      return exists ? prev : [partner, ...prev];
+    });
+    router.replace(`/messages?with=${partner.username}`, { scroll: false });
     void fetchMessages(partner.id, false);
   };
 
   // Back to inbox on mobile
   const handleBackToInbox = () => {
     setActivePartner(null);
-    router.replace("/messages");
+    router.replace("/messages", { scroll: false });
   };
 
   // Send message
@@ -260,14 +326,28 @@ export function Messenger({
     }
   };
 
-  // Filtered users for search in left sidebar
-  const filteredUsers = searchQuery.trim()
-    ? allUsers.filter(
-        (u) =>
-          u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          u.displayName.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : [];
+  // Combined live users for search in left sidebar
+  const filteredUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const map = new Map<number, PartnerInfo>();
+    // First from in-memory allUsers
+    for (const u of allUsers) {
+      if (
+        u.username.toLowerCase().includes(q) ||
+        u.displayName.toLowerCase().includes(q)
+      ) {
+        map.set(u.id, u);
+      }
+    }
+    // Then from server search results
+    for (const u of serverSearchResults) {
+      map.set(u.id, u);
+    }
+    // Never show self in search results
+    map.delete(currentUser.id);
+    return Array.from(map.values());
+  }, [searchQuery, allUsers, serverSearchResults, currentUser.id]);
 
   // Filtered titles for title recommendation picker
   const filteredAvailableTitles = titlePickerSearch.trim()
@@ -319,6 +399,15 @@ export function Messenger({
                 className="w-full rounded-lg border border-line bg-black/40 px-3 py-1.5 pl-8 text-xs text-paper placeholder:text-mute focus:border-paper focus:outline-none"
               />
               <span className="absolute left-2.5 top-2 text-xs text-mute">🔍</span>
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-2 text-[10px] text-mute hover:text-paper"
+                >
+                  ✕
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -326,18 +415,31 @@ export function Messenger({
           <div className="flex-1 overflow-y-auto divide-y divide-line/40">
             {searchQuery.trim() ? (
               <div>
-                <div className="mono bg-white/[0.02] px-4 py-2 text-[9px] uppercase tracking-wider text-mute">
-                  Search Results ({filteredUsers.length})
+                <div className="mono bg-white/[0.02] px-4 py-2 text-[9px] uppercase tracking-wider text-mute flex items-center justify-between">
+                  <span>Search Results ({filteredUsers.length})</span>
+                  {isSearchingUsers ? (
+                    <span className="animate-pulse text-amber-400 text-[8.5px]">searching...</span>
+                  ) : null}
                 </div>
                 {filteredUsers.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-dim">No panelists found.</div>
+                  <div className="p-6 text-center text-xs text-dim">
+                    <p>{isSearchingUsers ? "Searching for panelists..." : `No panelists matched "${searchQuery}".`}</p>
+                    <div className="mt-3">
+                      <Link
+                        href={`/library?q=${encodeURIComponent(searchQuery)}&tab=users`}
+                        className="mono text-[10px] text-paper underline hover:text-white"
+                      >
+                        Search all panelists in Library →
+                      </Link>
+                    </div>
+                  </div>
                 ) : (
                   filteredUsers.map((u) => (
                     <button
                       key={u.id}
                       type="button"
                       onClick={() => selectPartner(u)}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5 group"
                     >
                       <div className="display grid h-10 w-10 shrink-0 place-items-center border border-line bg-black/50 text-sm text-paper">
                         {u.avatarGlyph}

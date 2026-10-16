@@ -17,6 +17,7 @@ type SearchTitleResult = {
   glyph: string;
   studio: string;
   tagline: string;
+  posterUrl?: string | null;
 };
 
 export function QuickSearchModal({
@@ -217,7 +218,13 @@ export function QuickSearchModal({
         </div>
 
         {/* Scrollable Results Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6">
+        <div
+          className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6"
+          onClickCapture={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest("a")) onClose();
+          }}
+        >
           {isQueryEmpty ? (
             /* Suggested / Quick discovery when input is empty */
             <div className="space-y-6">
@@ -355,15 +362,29 @@ export function QuickSearchModal({
                         key={t.id}
                         href={`/title/${t.slug}`}
                         onClick={onClose}
-                        className="panel grain group flex items-center justify-between gap-3 p-3 transition-colors hover:border-paper/50"
+                        className="panel grain group flex items-center justify-between gap-3 p-2.5 transition-colors hover:border-paper/50"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <span
-                            className="display grid h-9 w-9 shrink-0 place-items-center border border-line bg-ink text-sm text-paper"
+                          <div
+                            className="relative h-11 w-8 shrink-0 overflow-hidden border border-line bg-ink"
                             style={{ borderColor: t.accent }}
                           >
-                            {t.glyph || t.name.charAt(0)}
-                          </span>
+                            {t.posterUrl ? (
+                              <img
+                                src={t.posterUrl}
+                                alt={t.name}
+                                className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <span
+                                className="display grid h-full w-full place-items-center text-xs text-paper"
+                                style={{ color: t.accent }}
+                              >
+                                {t.glyph || t.name.charAt(0)}
+                              </span>
+                            )}
+                          </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="truncate text-sm font-semibold text-paper group-hover:underline">
@@ -397,9 +418,10 @@ export function QuickSearchModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-line bg-ink px-4 py-2.5 text-[10px] text-mute">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-ink px-4 py-2.5 text-[10px] text-mute">
           <div className="flex items-center gap-2">
-            <span>Press <kbd className="rounded border border-line px-1 py-0.5 bg-white/5">↵ Enter</kbd> for full archive</span>
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Universal Archive: 100,000+ Anime, Manga & Manhwas Searchable</span>
           </div>
           <button
             type="button"

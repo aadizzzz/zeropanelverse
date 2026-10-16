@@ -115,6 +115,7 @@ export const titles = pgTable("titles", {
   glyph: varchar("glyph", { length: 4 }).default("Z").notNull(),
   tiers: jsonb("tiers").$type<TitleTiers>().notNull(),
   streamingPlanned: boolean("streaming_planned").default(true).notNull(),
+  posterUrl: text("poster_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

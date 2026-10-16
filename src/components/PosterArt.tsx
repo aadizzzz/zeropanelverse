@@ -24,6 +24,7 @@ export function PosterArt({
   accentSoft,
   texture,
   year,
+  posterUrl,
   className = "",
   compact = false,
 }: {
@@ -35,12 +36,17 @@ export function PosterArt({
   accentSoft: string;
   texture: string;
   year: number;
+  posterUrl?: string | null;
   className?: string;
   compact?: boolean;
 }) {
   const [imageError, setImageError] = useState(false);
+  const [fallbackTried, setFallbackTried] = useState(false);
   const angle = [-8, 6, -4, 10, -12, 4][hashIndex(slug, 6)];
   const layout = hashIndex(`${slug}x`, 3);
+
+  const primarySrc = posterUrl || `/posters/${slug}.jpg`;
+  const [activeSrc, setActiveSrc] = useState(primarySrc);
 
   return (
     <div
@@ -65,11 +71,18 @@ export function PosterArt({
       {/* Real Poster Artwork with zoom effect on hover */}
       {!imageError && (
         <img
-          src={`/posters/${slug}.jpg`}
+          src={activeSrc}
           alt={name}
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
           loading="lazy"
-          onError={() => setImageError(true)}
+          onError={() => {
+            if (posterUrl && !fallbackTried) {
+              setFallbackTried(true);
+              setActiveSrc(`/posters/${slug}.jpg`);
+            } else {
+              setImageError(true);
+            }
+          }}
         />
       )}
 

@@ -179,6 +179,7 @@ export default async function ProfilePage() {
                               accentSoft={item.accentSoft}
                               texture={item.texture}
                               year={item.year}
+                              posterUrl={item.posterUrl}
                               compact
                               className="aspect-[3/4] w-full border-0 border-b border-line"
                             />

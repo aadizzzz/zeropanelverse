@@ -8,12 +8,41 @@ import { TitleCard } from "@/components/TitleCard";
 import { LibraryFilters } from "@/components/LibraryFilters";
 import { UserSearchResultCard, type SearchUserResult } from "@/components/UserSearchResultCard";
 
+import type { Metadata } from "next";
+import { SITE_URL, generateBreadcrumbSchema } from "@/lib/seo";
+import { searchAniList, cacheAniListTitle } from "@/lib/anilist";
+
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Search & Library — ZeroPanelVerse",
+export const metadata: Metadata = {
+  title: "Search & Library — Anime, Manga & Manhwa Catalog",
   description:
-    "Browse and search anime, manga, manhwa, and community panelists to follow and read reviews from.",
+    "Search and browse the curated anime, manga, and manhwa catalog. Filter by format, audience experience level (Beginner, Mediocre, Elite), and discover top community panelists.",
+  keywords: [
+    "anime library",
+    "manga catalog",
+    "manhwa recommendations",
+    "beginner anime watch order",
+    "best anime ranked",
+    "anime search engine",
+    "community anime reviews",
+  ],
+  alternates: {
+    canonical: `${SITE_URL}/library`,
+  },
+  openGraph: {
+    title: "Search & Library — Anime, Manga & Manhwa Catalog | ZeroPanelVerse",
+    description:
+      "Explore the complete anime, manga, and manhwa archive. Filter by experience track, format, and search through community reviews.",
+    url: `${SITE_URL}/library`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Anime, Manga & Manhwa Library | ZeroPanelVerse",
+    description:
+      "Explore the complete anime, manga, and manhwa archive. Filter by experience track, format, and search community panelists.",
+  },
 };
 
 const FORMATS: TitleFormat[] = ["anime", "manga", "manhwa"];
@@ -113,9 +142,10 @@ export default async function LibraryPage({
   let rows: any[] = [];
   let genres: string[] = [];
   let userResults: SearchUserResult[] = [];
+  let formatCounts = { anime: 0, manga: 0, manhwa: 0 };
 
   try {
-    const [dbTitles, allGenres, dbUsers, currentUserFollows] = await Promise.all([
+    const [dbTitles, allGenres, dbUsers, currentUserFollows, formatRows] = await Promise.all([
       db.select().from(titles).where(titleWhere).orderBy(titleOrderBy),
       db.select({ genres: titles.genres }).from(titles),
       // Query users whenever q is entered, or tab is "users", or tab is "all"
@@ -166,9 +196,48 @@ export default async function LibraryPage({
             .from(follows)
             .where(eq(follows.followerId, currentUser.id))
         : Promise.resolve([]),
+      db
+        .select({ format: titles.format, count: sql<number>`count(*)::int` })
+        .from(titles)
+        .groupBy(titles.format),
     ]);
 
     rows = dbTitles;
+
+    formatCounts = {
+      anime: formatRows.find((r) => r.format === "anime")?.count ?? 0,
+      manga: formatRows.find((r) => r.format === "manga")?.count ?? 0,
+      manhwa: formatRows.find((r) => r.format === "manhwa")?.count ?? 0,
+    };
+
+    // If query q returned few results, dynamically search the vast AniList catalog of 100,000+ titles
+    if (q && rows.length < 24) {
+      try {
+        const anilistResults = await searchAniList({
+          q,
+          format: format || undefined,
+          perPage: 12,
+        });
+
+        for (const item of anilistResults) {
+          const cached = await cacheAniListTitle(item);
+          if (
+            cached &&
+            !rows.some(
+              (r) =>
+                r.id === cached.id ||
+                r.slug === cached.slug ||
+                r.name.toLowerCase() === cached.name.toLowerCase(),
+            )
+          ) {
+            rows.push(cached);
+          }
+        }
+      } catch (apiErr) {
+        console.warn("Library AniList search augmentation error:", apiErr);
+      }
+    }
+
     genres = [...new Set(allGenres.flatMap((row) => row.genres))].sort((a, b) =>
       a.localeCompare(b),
     );
@@ -200,6 +269,11 @@ export default async function LibraryPage({
     // Fallback to static seed data
     const { seedTitles, seedPanels } = await import("@/lib/seed-data");
     rows = seedTitles;
+    formatCounts = {
+      anime: seedTitles.filter((r) => r.format === "anime").length,
+      manga: seedTitles.filter((r) => r.format === "manga").length,
+      manhwa: seedTitles.filter((r) => r.format === "manhwa").length,
+    };
     genres = [...new Set(seedTitles.flatMap((row) => row.genres))].sort((a, b) =>
       a.localeCompare(b),
     );
@@ -265,12 +339,24 @@ export default async function LibraryPage({
   const isLoggedIn = Boolean(currentUser);
   const showUsersSection = (tab === "all" || tab === "users") && (q ? userResults.length > 0 : tab === "users" || userResults.length > 0);
   const showTitlesSection = tab === "all" || tab === "titles";
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Library", path: "/library" },
+  ]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
-      <div className="mono flex items-center gap-3 text-[9px] text-mute">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <div className="mono flex flex-wrap items-center gap-3 text-[9px] text-mute">
         <span className="h-px w-10 bg-paper/40" />
         the archive & community search
+        <span className="mono border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300 flex items-center gap-1.5 ml-auto">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          Live Archive: {formatCounts.anime} Anime • {formatCounts.manga} Manga • {formatCounts.manhwa} Manhwa (100,000+ Universe Connected)
+        </span>
       </div>
       <h1 className="display mt-5 text-5xl text-paper sm:text-7xl">
         {tab === "users" ? "Panelists & Users" : "Search & Library"}
@@ -287,6 +373,7 @@ export default async function LibraryPage({
           genres={genres}
           titleCount={rows.length}
           userCount={userResults.length}
+          formatCounts={formatCounts}
         />
       </div>
 
@@ -336,18 +423,21 @@ export default async function LibraryPage({
       {/* ================= TITLES SECTION ================= */}
       {showTitlesSection ? (
         <section className={showUsersSection ? "mt-14" : "mt-8"}>
-          {tab === "all" && userResults.length > 0 ? (
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <div>
-                <h2 className="display text-xl text-paper sm:text-2xl">
-                  Titles & Series ({rows.length})
-                </h2>
-                <p className="mono mt-1 text-[10px] text-mute">
-                  Anime, manga and manhwa titles matching your filters
-                </p>
-              </div>
+          <div className="flex flex-wrap items-center justify-between border-b border-line pb-3">
+            <div>
+              <h2 className="display text-xl text-paper sm:text-2xl">
+                {q ? `Matched Titles (${rows.length})` : `Titles Catalog (${rows.length})`}
+              </h2>
+              <p className="mono mt-1 text-[10px] text-mute flex items-center gap-2">
+                <span>Real-time: {formatCounts.anime} Anime • {formatCounts.manga} Manga • {formatCounts.manhwa} Manhwa</span>
+                <span className="text-paper/30">•</span>
+                <span className="text-emerald-400">100,000+ Universe Connected</span>
+              </p>
             </div>
-          ) : null}
+            <span className="mono text-[10px] text-dim">
+              Showing {rows.length} {format && format !== "all" ? format : "titles"}
+            </span>
+          </div>
 
           {rows.length === 0 ? (
             <div className="panel mt-6 p-12 text-center">

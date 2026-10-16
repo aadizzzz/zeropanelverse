@@ -120,18 +120,28 @@ export function UserSearchResultCard({
 
         <div className="flex shrink-0 items-center gap-1.5">
           {!user.isSelf ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={handleFollowToggle}
-              className={`mono rounded px-3 py-1 text-[9.5px] font-semibold transition-all ${
-                following
-                  ? "border border-line bg-transparent text-dim hover:border-red-400 hover:text-red-400"
-                  : "bg-paper text-ink hover:opacity-85"
-              }`}
-            >
-              {following ? "Following ✓" : "+ Follow"}
-            </button>
+            <>
+              <Link
+                href={`/messages?with=${user.username}`}
+                className="mono flex items-center gap-1 rounded border border-paper/30 bg-paper/10 px-2.5 py-1 text-[9.5px] font-semibold text-paper transition-all hover:border-paper hover:bg-paper hover:text-ink"
+                title={`Direct message @${user.username}`}
+              >
+                <span>Message</span>
+                <span>✈️</span>
+              </Link>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={handleFollowToggle}
+                className={`mono rounded px-2.5 py-1 text-[9.5px] font-semibold transition-all ${
+                  following
+                    ? "border border-line bg-transparent text-dim hover:border-red-400 hover:text-red-400"
+                    : "border border-line text-paper hover:border-paper"
+                }`}
+              >
+                {following ? "Following ✓" : "+ Follow"}
+              </button>
+            </>
           ) : (
             <span className="mono rounded border border-line px-2 py-0.5 text-[8.5px] text-mute">
               You
@@ -139,7 +149,7 @@ export function UserSearchResultCard({
           )}
           <Link
             href={`/u/${user.username}`}
-            className="mono rounded border border-line bg-white/5 px-2.5 py-1 text-[9.5px] text-paper transition-colors hover:border-paper hover:bg-white/10"
+            className="mono rounded border border-line bg-white/5 px-2.5 py-1 text-[9.5px] text-mute transition-colors hover:border-paper hover:text-paper"
             title="See reviews"
           >
             Reviews →
@@ -255,10 +265,11 @@ export function UserSearchResultCard({
           {!user.isSelf ? (
             <Link
               href={`/messages?with=${user.username}`}
-              title="Message panelist"
-              className="mono rounded border border-line bg-white/5 px-2.5 py-1.5 text-[10px] text-mute transition-colors hover:border-paper hover:text-paper"
+              title={`Direct message @${user.username}`}
+              className="mono flex items-center gap-1.5 rounded border border-paper/30 bg-paper/10 px-3.5 py-1.5 text-[10px] font-semibold text-paper transition-all hover:border-paper hover:bg-paper hover:text-ink"
             >
-              ✈️
+              <span>Message</span>
+              <span>✈️</span>
             </Link>
           ) : null}
         </div>

@@ -8,11 +8,51 @@ import { LEVEL_LABELS, getCurrentUser } from "@/lib/auth";
 import { ProfileHeaderActions } from "@/components/ProfileFollowButton";
 import { ProfileFeedTabs } from "@/components/ProfileFeedTabs";
 
+import type { Metadata } from "next";
+import { SITE_URL, generateProfileSchema, generateBreadcrumbSchema } from "@/lib/seo";
+
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: Promise<{ username: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ username: string }>;
+}): Promise<Metadata> {
   const { username } = await params;
-  return { title: `@${username} — ZeroPanelVerse` };
+  let profile: any = null;
+  try {
+    const rows = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username.toLowerCase()))
+      .limit(1);
+    profile = rows[0] ?? null;
+  } catch {}
+
+  const displayName = profile?.displayName || username;
+  const bio =
+    profile?.bio ||
+    `Anime, manga, and manhwa reviews and watchlist by @${username} on ZeroPanelVerse.`;
+  const canonicalUrl = `${SITE_URL}/u/${username}`;
+
+  return {
+    title: `${displayName} (@${username}) — Panelist Profile`,
+    description: bio.slice(0, 160),
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${displayName} (@${username}) | ZeroPanelVerse`,
+      description: bio.slice(0, 160),
+      url: canonicalUrl,
+      type: "profile",
+    },
+    twitter: {
+      card: "summary",
+      title: `${displayName} (@${username}) | ZeroPanelVerse`,
+      description: bio.slice(0, 160),
+    },
+  };
 }
 
 export default async function PublicProfilePage({
@@ -196,9 +236,23 @@ export default async function PublicProfilePage({
   }
 
   const isOwnProfile = currentUser ? currentUser.id === profile.id : false;
+  const profileSchema = generateProfileSchema(profile);
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Panelists", path: "/library" },
+    { name: profile.displayName, path: `/u/${profile.username}` },
+  ]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(profileSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       {/* ================= Profile Banner & Info ================= */}
       <section className="panel grain relative overflow-hidden p-6 sm:p-10">
         <div className="tex-halftone absolute inset-0 opacity-20" />

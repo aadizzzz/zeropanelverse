@@ -6,12 +6,39 @@ import { ensureSeeded } from "@/lib/db-init";
 import { getCurrentUser } from "@/lib/auth";
 import { WaitlistForm } from "@/components/WaitlistForm";
 
+import type { Metadata } from "next";
+import { SITE_URL, generateBreadcrumbSchema } from "@/lib/seo";
+
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Streaming — planned · ZeroPanelVerse",
+export const metadata: Metadata = {
+  title: "ZeroPanel Stream — The Monochrome Anime & Manga Player Roadmap",
   description:
-    "The ZeroPanelVerse streaming player is planned. See the roadmap and join the launch list.",
+    "ZeroPanel Stream is under active development. A player built for cinema mode with per-title accents, synced watchlist progress, and manga volume chapter markers.",
+  keywords: [
+    "anime streaming player",
+    "anime cinema mode",
+    "manga reader synced",
+    "zeropanel stream",
+    "anime streaming roadmap",
+    "minimalist anime player",
+  ],
+  alternates: {
+    canonical: `${SITE_URL}/streaming`,
+  },
+  openGraph: {
+    title: "ZeroPanel Stream Roadmap | ZeroPanelVerse",
+    description:
+      "The next panel of the verse: an anime and manga streaming player with cinematic theming and synced watchlist resume points.",
+    url: `${SITE_URL}/streaming`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ZeroPanel Stream Roadmap | ZeroPanelVerse",
+    description:
+      "An anime and manga streaming player with cinematic theming and synced watchlist resume points.",
+  },
 };
 
 const PHASES = [
@@ -79,9 +106,17 @@ export default async function StreamingPage() {
   }
 
   const queueCount = queued[0]?.count ?? 0;
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Streaming", path: "/streaming" },
+  ]);
 
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       <section className="relative overflow-hidden border-b border-line">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-30 grayscale"

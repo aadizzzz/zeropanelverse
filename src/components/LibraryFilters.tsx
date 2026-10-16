@@ -51,11 +51,13 @@ export function LibraryFilters({
   genres,
   titleCount,
   userCount,
+  formatCounts = { anime: 0, manga: 0, manhwa: 0 },
 }: {
   query: LibraryQuery;
   genres: string[];
   titleCount: number;
   userCount: number;
+  formatCounts?: { anime: number; manga: number; manhwa: number };
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -138,6 +140,46 @@ export function LibraryFilters({
         </button>
       </div>
 
+      {/* Quick Format Pills with Realtime Counts */}
+      {activeTab !== "users" && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] scrollbar-none">
+          <span className="mono text-mute mr-1 shrink-0 text-[9px] uppercase tracking-wider">Format:</span>
+          {[
+            {
+              value: "all",
+              label: "All",
+              count: (formatCounts.anime || 0) + (formatCounts.manga || 0) + (formatCounts.manhwa || 0),
+            },
+            { value: "anime", label: "Anime", count: formatCounts.anime || 0 },
+            { value: "manga", label: "Manga", count: formatCounts.manga || 0 },
+            { value: "manhwa", label: "Manhwa", count: formatCounts.manhwa || 0 },
+          ].map((f) => {
+            const isSelected = (!query.format && f.value === "all") || query.format === f.value;
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => update("format", f.value)}
+                className={`mono shrink-0 flex items-center gap-1.5 rounded px-2.5 py-1 transition-all ${
+                  isSelected
+                    ? "bg-paper text-ink font-bold shadow-sm"
+                    : "border border-line bg-white/[0.02] text-dim hover:border-paper/40 hover:text-paper"
+                }`}
+              >
+                <span>{f.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[8.5px] ${
+                    isSelected ? "bg-ink text-paper" : "bg-white/10 text-paper/80"
+                  }`}
+                >
+                  {f.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Search Input Bar */}
       <form
         className="flex gap-2"
@@ -151,7 +193,7 @@ export function LibraryFilters({
             name="q"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search titles, anime, manga, or panelists & users (@username)…"
+            placeholder="Search across thousands of animes, mangas, manhwas, or panelists (@username)…"
             className="field w-full pr-8"
           />
           {searchInput ? (
@@ -214,11 +256,12 @@ export function LibraryFilters({
             value={query.format}
             onChange={(event) => update("format", event.target.value)}
           >
-            {FORMATS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
+            <option value="all">
+              All formats ({titleCount > 0 ? titleCount : (formatCounts.anime || 0) + (formatCounts.manga || 0) + (formatCounts.manhwa || 0)})
+            </option>
+            <option value="anime">Anime ({formatCounts.anime || 0})</option>
+            <option value="manga">Manga ({formatCounts.manga || 0})</option>
+            <option value="manhwa">Manhwa ({formatCounts.manhwa || 0})</option>
           </select>
           <select
             aria-label="Audience Level"

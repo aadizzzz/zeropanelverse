@@ -8,12 +8,39 @@ import { getLens } from "@/lib/lens";
 import { LEVEL_NAMES, canSee, hasOpenAccess } from "@/lib/lens-shared";
 import { SpoilerVeil } from "@/components/SpoilerVeil";
 
+import type { Metadata } from "next";
+import { SITE_URL, generateBreadcrumbSchema } from "@/lib/seo";
+
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Panels — community reviews, views and suggestions",
+export const metadata: Metadata = {
+  title: "Panels — Anime & Manga Community Reviews & Discussions",
   description:
-    "Every review, point of view and suggestion posted across the ZeroPanelVerse archive, in a spoiler-safe lounge and a no-boundaries open floor.",
+    "Join the conversation across the Beginner Lounge (spoiler-free) and Open Floor (unfiltered deep dives). Read reviews, perspectives, and recommendations graded by audience level.",
+  keywords: [
+    "anime discussion panels",
+    "spoiler free anime reviews",
+    "anime community discussions",
+    "manga recommendations forum",
+    "anime verdicts",
+    "anime points of view",
+  ],
+  alternates: {
+    canonical: `${SITE_URL}/panels`,
+  },
+  openGraph: {
+    title: "Panels — Community Reviews & Perspectives | ZeroPanelVerse",
+    description:
+      "Every review, point of view, and suggestion across the ZeroPanelVerse archive in spoiler-safe and open discussion rooms.",
+    url: `${SITE_URL}/panels`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Panels — Anime Reviews & Discussion | ZeroPanelVerse",
+    description:
+      "Every review, point of view, and suggestion across the ZeroPanelVerse archive.",
+  },
 };
 
 const KINDS: { value: string; label: string; copy: string }[] = [
@@ -157,8 +184,17 @@ export default async function PanelsPage({
     return text ? `/panels?${text}` : "/panels";
   };
 
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Panels", path: "/panels" },
+  ]);
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       <div className="mono flex items-center gap-3 text-[9px] text-mute">
         <span className="h-px w-10 bg-paper/40" />
         community

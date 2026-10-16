@@ -91,3 +91,32 @@ The database seeds automatically on first launch (`src/lib/db-init.ts`) with sam
 ├── drizzle.config.ts        # Drizzle Kit configuration (reads DATABASE_URL)
 └── package.json
 ```
+
+---
+
+## 🔍 SEO & Google Search Console Listing
+
+ZeroPanelVerse includes a complete production SEO architecture designed for Google Search indexing and rich snippets:
+
+1. **Dynamic Sitemap (`/sitemap.xml`)**:
+   - Automatically crawls and serves all static routes, audience filter landing pages (`/library?level=...`), all individual anime/manga title entries (`/title/[slug]`), and curator profiles (`/u/[username]`).
+
+2. **Crawler Directives (`/robots.txt`)**:
+   - Explicitly configured for `Googlebot` and general web crawlers. Whitelists public catalogs while keeping auth/api routes private.
+
+3. **Schema.org Structured Data (JSON-LD)**:
+   - **`WebSite` with `SearchAction`**: Enables the Google Sitelinks Searchbox directly in SERP results.
+   - **`Organization`**: Brand knowledge panel data.
+   - **`TVSeries` / `Book` / `Movie`**: Rating stars, episode counts, creators, release years for individual titles.
+   - **`BreadcrumbList`**: Full breadcrumb trail shown in search results.
+   - **`ProfilePage` / `Person`**: Curator and reviewer profiles.
+
+4. **Dynamic OpenGraph & Social Cards (`/opengraph-image`)**:
+   - Generates high-contrast 1200x630 social preview banners for Google Discover, Twitter, Discord, and messaging apps.
+
+### How to Get Listed on Google in 4 Steps:
+1. **Set your domain**: In `.env.local`, set `NEXT_PUBLIC_SITE_URL="https://yourdomain.com"`.
+2. **Open [Google Search Console](https://search.google.com/search-console)**: Add your domain property (`https://yourdomain.com`).
+3. **Verify ownership**: Select "HTML tag", copy the content string, and add it to `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION="your-code"` in `.env.local` (or deploy to Vercel/production).
+4. **Submit Sitemap**: In Google Search Console, go to **Sitemaps** on the left menu, enter `sitemap.xml`, and click **Submit**. Googlebot will crawl and index your pages.
+

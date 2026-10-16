@@ -8,12 +8,40 @@ import { getLens } from "@/lib/lens";
 import { LEVELS, LEVEL_NAMES, LEVEL_RANK, levelFit, powerTier } from "@/lib/lens-shared";
 import { PowerSpark } from "@/components/PowerSpark";
 
+import type { Metadata } from "next";
+import { SITE_URL, generateBreadcrumbSchema } from "@/lib/seo";
+
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Timeline — what came first · ZeroPanelVerse",
+export const metadata: Metadata = {
+  title: "Franchise Timeline & Release Era Chronology Tree",
   description:
-    "A tree of the whole archive by release era, with rating-ranked suggested routes for beginner, mediocre and elite audiences.",
+    "Explore the complete chronological anime and manga release tree. Trace classic to modern eras with rating-ranked suggested watch routes for beginner, mediocre, and elite audiences.",
+  keywords: [
+    "anime timeline",
+    "anime watch order chronology",
+    "manga release eras",
+    "anime franchise timeline tree",
+    "beginner anime route",
+    "classic anime timeline",
+    "anime chronological order guide",
+  ],
+  alternates: {
+    canonical: `${SITE_URL}/timeline`,
+  },
+  openGraph: {
+    title: "Franchise Timeline & Chronology Tree | ZeroPanelVerse",
+    description:
+      "Interactive franchise timeline trees, release chronology, and difficulty routes across the anime and manga archive.",
+    url: `${SITE_URL}/timeline`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Anime & Manga Franchise Timeline | ZeroPanelVerse",
+    description:
+      "Interactive franchise timeline trees, release chronology, and difficulty routes.",
+  },
 };
 
 const FORMATS: Array<TitleFormat | "all"> = ["all", "anime", "manga", "manhwa"];
@@ -127,9 +155,17 @@ export default async function TimelinePage({
   }).filter((era) => era.members.length > 0);
 
   const earliest = list.reduce((min, t) => Math.min(min, t.year), 9999);
+  const breadcrumbSchema = generateBreadcrumbSchema([
+    { name: "Home", path: "/" },
+    { name: "Timeline", path: "/timeline" },
+  ]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       <div className="mono flex items-center gap-3 text-[9px] text-mute">
         <span className="h-px w-10 bg-paper/40" />
         the archive tree
