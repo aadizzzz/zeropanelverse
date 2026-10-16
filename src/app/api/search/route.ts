@@ -142,17 +142,17 @@ export async function GET(request: Request) {
             bio: users.bio,
             experienceLevel: users.experienceLevel,
             avatarGlyph: users.avatarGlyph,
-            followersCount: sql<number>`(select count(*)::int from ${follows} where ${follows.followingId} = ${users.id})`,
-            reviewsCount: sql<number>`(select count(*)::int from ${panels} where ${panels.userId} = ${users.id})`,
-            latestHeadline: sql<string | null>`(select p.headline from ${panels} p where p.user_id = ${users.id} order by p.created_at desc limit 1)`,
-            latestTitleName: sql<string | null>`(select t.name from ${panels} p join ${titles} t on t.id = p.title_id where p.user_id = ${users.id} order by p.created_at desc limit 1)`,
-            latestRating: sql<number | null>`(select p.rating from ${panels} p where p.user_id = ${users.id} order by p.created_at desc limit 1)`,
-            latestSlug: sql<string | null>`(select t.slug from ${panels} p join ${titles} t on t.id = p.title_id where p.user_id = ${users.id} order by p.created_at desc limit 1)`,
+            followersCount: sql<number>`(select count(*)::int from follows f where f.following_id = users.id)`,
+            reviewsCount: sql<number>`(select count(*)::int from panels p where p.user_id = users.id)`,
+            latestHeadline: sql<string | null>`(select p.headline from panels p where p.user_id = users.id order by p.created_at desc limit 1)`,
+            latestTitleName: sql<string | null>`(select t.name from panels p join titles t on t.id = p.title_id where p.user_id = users.id order by p.created_at desc limit 1)`,
+            latestRating: sql<number | null>`(select p.rating from panels p where p.user_id = users.id order by p.created_at desc limit 1)`,
+            latestSlug: sql<string | null>`(select t.slug from panels p join titles t on t.id = p.title_id where p.user_id = users.id order by p.created_at desc limit 1)`,
           })
           .from(users)
           .where(userConditions.length > 0 ? and(...userConditions) : undefined)
           .orderBy(
-            desc(sql`(select count(*)::int from ${follows} where ${follows.followingId} = ${users.id})`),
+            desc(sql`(select count(*)::int from follows f where f.following_id = users.id)`),
             asc(users.username),
           )
           .limit(limit);
