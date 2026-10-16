@@ -115,13 +115,12 @@ export default async function LibraryPage({
   // ================= 2. Build Users Query =================
   const userConditions: SQL[] = [];
   if (q) {
-    const cleanQ = q.startsWith("@") ? q.slice(1) : q;
-    const like = `%${q}%`;
+    const cleanQ = (q.startsWith("@") ? q.slice(1) : q).trim();
     const cleanLike = `%${cleanQ}%`;
     const userSearch = or(
       ilike(users.username, cleanLike),
-      ilike(users.displayName, like),
-      ilike(users.bio, like),
+      ilike(users.displayName, cleanLike),
+      ilike(users.bio, cleanLike),
     );
     if (userSearch) userConditions.push(userSearch);
   }
@@ -302,6 +301,22 @@ export default async function LibraryPage({
         bio: "Manga-first since the 90s. I write long-form breakdowns of paneling, causality and authorial intent.",
         experienceLevel: "elite" as const,
         avatarGlyph: "K",
+      },
+      {
+        id: 4,
+        username: "aadizzzz",
+        displayName: "Aditya",
+        bio: "Platform creator & anime enthusiast",
+        experienceLevel: "mediocre" as const,
+        avatarGlyph: "A",
+      },
+      {
+        id: 5,
+        username: "aadizz",
+        displayName: "Aditya Dhiman",
+        bio: "Watching & reviewing anime, manga, and manhwas",
+        experienceLevel: "mediocre" as const,
+        avatarGlyph: "A",
       },
     ];
 

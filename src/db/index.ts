@@ -21,6 +21,12 @@ function sanitizeDatabaseUrl(url: string | undefined): string {
       .replace("@db.lqiakhggjslyyohsnwbu.supabase.co", "@aws-0-ap-south-1.pooler.supabase.com");
   }
 
+  // If pointing to Supabase pooler on port 5432 (session mode), redirect to 6543 (transaction mode)
+  // to avoid max client connection limits (EMAXCONNSESSION) in serverless / Next.js environments
+  if (cleaned.includes("pooler.supabase.com:5432")) {
+    cleaned = cleaned.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543");
+  }
+
   return cleaned;
 }
 
@@ -41,6 +47,9 @@ export const pool =
     connectionString: databaseUrl,
     ssl: isCloudDb ? { rejectUnauthorized: false } : undefined,
     connectionTimeoutMillis: 5000,
+    max: 5,
+    idleTimeoutMillis: 15000,
+    allowExitOnIdle: true,
   });
 
 if (process.env.NODE_ENV !== "production") {
