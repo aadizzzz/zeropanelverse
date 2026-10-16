@@ -217,15 +217,29 @@ async function runSeed(): Promise<void> {
   await seedSocial();
 }
 
+let isAlreadySeeded = false;
+
 export function ensureSeeded(): Promise<void> {
-  if (!process.env.DATABASE_URL) {
+  if (isAlreadySeeded || !process.env.DATABASE_URL) {
     return Promise.resolve();
   }
   if (!seedPromise) {
-    seedPromise = runSeed().catch((error) => {
-      console.warn("Background seed notice:", error?.message || error);
-      seedPromise = null;
-    });
+    seedPromise = (async () => {
+      try {
+        // Fast-path check: If database already has titles, skip the 15 sequential seed queries!
+        const existing = await db.select({ id: titles.id }).from(titles).limit(1);
+        if (existing.length > 0) {
+          isAlreadySeeded = true;
+          return;
+        }
+        await runSeed();
+        isAlreadySeeded = true;
+      } catch (error: any) {
+        console.warn("Background seed notice:", error?.message || error);
+        // Mark as seeded on error so subsequent requests don't hang retrying
+        isAlreadySeeded = true;
+      }
+    })();
   }
   return seedPromise;
 }
