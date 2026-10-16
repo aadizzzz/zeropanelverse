@@ -339,3 +339,31 @@ body {
 select.field option {
   background: #0c0c0e;
 }
+
+/* ---------- Messenger App Screen: Mobile & Tablet Sticky Responsive Viewport ---------- */
+body:has([data-messenger-root]) footer {
+  display: none !important;
+}
+
+@media (max-width: 1023px) {
+  body.messenger-chat-active,
+  body:has([data-chat-active="true"]) {
+    overflow: hidden !important;
+    position: fixed !important;
+    width: 100% !important;
+    height: 100% !important;
+    touch-action: none;
+    -webkit-overflow-scrolling: auto;
+  }
+
+  body.messenger-chat-active nav,
+  body.messenger-chat-active header,
+  body.messenger-chat-active [data-lens-bar],
+  body.messenger-chat-active footer,
+  body:has([data-chat-active="true"]) nav,
+  body:has([data-chat-active="true"]) header,
+  body:has([data-chat-active="true"]) [data-lens-bar],
+  body:has([data-chat-active="true"]) footer {
+    display: none !important;
+  }
+}

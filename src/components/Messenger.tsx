@@ -77,6 +77,7 @@ export function Messenger({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activePartnerRef = useRef<PartnerInfo | null>(activePartner);
 
@@ -84,9 +85,22 @@ export function Messenger({
     activePartnerRef.current = activePartner;
   }, [activePartner]);
 
-  // Smooth scroll to bottom
-  const scrollToBottom = useCallback((smooth = true) => {
-    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+  // Robust container-only scroll to bottom (NEVER scrolls the window/page)
+  const scrollToBottom = useCallback((smooth = true, force = false) => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    // Check if user is scrolled near bottom (within 140px threshold)
+    const isNearBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+
+    if (force || isNearBottom) {
+      if (smooth) {
+        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
   }, []);
 
   // Fetch messages with active partner (silent polling vs manual load)
@@ -109,7 +123,8 @@ export function Messenger({
             }
 
             if (newMsgs.length > prev.length) {
-              setTimeout(() => scrollToBottom(true), 60);
+              // Only auto-scroll on new message if user was already near the bottom
+              setTimeout(() => scrollToBottom(true, false), 50);
             }
             return newMsgs;
           });
@@ -123,7 +138,8 @@ export function Messenger({
           }
 
           if (!isSilent) {
-            setTimeout(() => scrollToBottom(false), 50);
+            // Force instant scroll when explicitly opening conversation
+            setTimeout(() => scrollToBottom(false, true), 40);
           }
         }
       } catch {
@@ -193,9 +209,14 @@ export function Messenger({
     };
   }, [targetUsername, fetchMessages]);
 
-  // Respond whenever URL ?with= changes (e.g. user selected someone from search modal)
+  // Respond whenever URL ?with= changes (e.g. user selected someone from search modal or pressed back)
   useEffect(() => {
-    if (!targetUsername) return;
+    if (!targetUsername) {
+      if (activePartnerRef.current) {
+        setActivePartner(null);
+      }
+      return;
+    }
     if (activePartnerRef.current?.username?.toLowerCase() === targetUsername.toLowerCase()) {
       return;
     }
@@ -297,7 +318,7 @@ export function Messenger({
     setSelectedTitleSlug("");
     setShowTitlePicker(false);
     setSending(true);
-    setTimeout(() => scrollToBottom(true), 40);
+    setTimeout(() => scrollToBottom(true, true), 30);
 
     try {
       const res = await fetch("/api/messages", {
@@ -358,15 +379,41 @@ export function Messenger({
 
   const isChatOpenOnMobile = activePartner !== null;
 
+  // Lock body scroll and prevent background shifting on mobile/tablet when chat is actively open
+  useEffect(() => {
+    if (isChatOpenOnMobile) {
+      document.body.classList.add("messenger-chat-active");
+      document.documentElement.classList.add("messenger-chat-active");
+      return () => {
+        document.body.classList.remove("messenger-chat-active");
+        document.documentElement.classList.remove("messenger-chat-active");
+      };
+    }
+  }, [isChatOpenOnMobile]);
+
   return (
-    <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-8">
+    <div
+      data-messenger-root
+      data-chat-active={isChatOpenOnMobile ? "true" : "false"}
+      className={
+        isChatOpenOnMobile
+          ? "max-lg:fixed max-lg:inset-0 max-lg:z-50 max-lg:h-[100dvh] max-lg:w-screen max-lg:p-0 max-lg:m-0 max-lg:overflow-hidden mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-8 lg:p-6"
+          : "mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-8"
+      }
+    >
       {/* Container simulating Instagram Direct Web Interface */}
-      <div className="panel grain overflow-hidden rounded-xl border border-line bg-ink/90 shadow-2xl backdrop-blur-xl h-[calc(100dvh-130px)] min-h-[520px] max-h-[820px] flex md:grid md:grid-cols-[320px_1fr]">
+      <div
+        className={`panel grain bg-ink/90 shadow-2xl backdrop-blur-xl ${
+          isChatOpenOnMobile
+            ? "max-lg:fixed max-lg:inset-0 max-lg:z-50 max-lg:h-[100dvh] max-lg:w-screen max-lg:rounded-none max-lg:border-0 flex flex-col lg:grid lg:grid-cols-[320px_1fr] lg:h-[calc(100dvh-130px)] lg:min-h-[520px] lg:max-h-[820px] lg:rounded-xl lg:border lg:border-line overflow-hidden"
+            : "flex lg:grid lg:grid-cols-[320px_1fr] h-[calc(100dvh-130px)] min-h-[520px] max-h-[820px] rounded-xl border border-line overflow-hidden"
+        }`}
+      >
         {/* ================= LEFT SIDEBAR (Inbox & Threads) ================= */}
-        {/* Hidden on mobile when chat is open */}
+        {/* Hidden on mobile/tablet when chat is open */}
         <aside
-          className={`h-full flex-col border-b border-line md:border-b-0 md:border-r w-full md:w-[320px] shrink-0 ${
-            isChatOpenOnMobile ? "hidden md:flex" : "flex"
+          className={`h-full flex-col border-b border-line lg:border-b-0 lg:border-r w-full lg:w-[320px] shrink-0 ${
+            isChatOpenOnMobile ? "hidden lg:flex" : "flex"
           }`}
         >
           {/* Header */}
@@ -566,26 +613,26 @@ export function Messenger({
         </aside>
 
         {/* ================= RIGHT PANE (Chat Window) ================= */}
-        {/* Visible when activePartner is selected, or always on tablet/desktop */}
+        {/* Visible when activePartner is selected, or always on desktop */}
         <main
-          className={`h-full flex-col bg-black/20 flex-1 min-w-0 ${
-            !isChatOpenOnMobile ? "hidden md:flex" : "flex"
+          className={`h-full flex-col bg-black/20 flex-1 min-w-0 overflow-hidden ${
+            !isChatOpenOnMobile ? "hidden lg:flex" : "flex"
           }`}
         >
           {activePartner ? (
             <>
               {/* Chat Header */}
-              <div className="flex items-center justify-between border-b border-line px-3 py-2.5 sm:px-5 sm:py-3.5 backdrop-blur-md">
+              <div className="shrink-0 flex items-center justify-between border-b border-line px-3 py-2.5 sm:px-5 sm:py-3.5 bg-ink/95 backdrop-blur-md">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  {/* Mobile Back Button to return to Inbox */}
+                  {/* Mobile/Tablet Back Button to return to Inbox */}
                   <button
                     type="button"
                     onClick={handleBackToInbox}
-                    className="flex items-center gap-1 rounded border border-line bg-white/5 px-2 py-1 text-xs text-paper hover:bg-white/10 md:hidden"
+                    className="flex items-center gap-1.5 rounded-lg border border-line bg-white/5 px-2.5 py-1.5 text-xs text-paper hover:bg-white/10 active:scale-95 lg:hidden shrink-0"
                     title="Back to inbox"
                   >
-                    <span>←</span>
-                    <span className="mono text-[9px]">Inbox</span>
+                    <span className="text-sm font-bold leading-none">←</span>
+                    <span className="mono text-[10px] font-semibold leading-none">Inbox</span>
                   </button>
 
                   <Link
@@ -625,7 +672,11 @@ export function Messenger({
               </div>
 
               {/* Messages Feed */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3">
+              <div
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-5 space-y-3"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
                 {/* Intro Card (compact on mobile) */}
                 <div className="my-2 flex flex-col items-center justify-center text-center sm:my-4">
                   <div className="display grid h-10 w-10 sm:h-14 sm:w-14 place-items-center rounded-full border border-line bg-black/60 text-lg sm:text-2xl text-paper">
@@ -851,14 +902,14 @@ export function Messenger({
               )}
 
               {/* Input Bar */}
-              <div className="border-t border-line bg-black/60 p-2.5 sm:p-3.5">
+              <div className="shrink-0 border-t border-line bg-black/80 backdrop-blur-md p-2.5 sm:p-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0.75rem))]">
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                   {/* Share Anime Recommendation Button with Poster icon */}
                   <button
                     type="button"
                     onClick={() => setShowTitlePicker((prev) => !prev)}
                     title="Recommend Anime with Poster"
-                    className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border border-line bg-white/5 text-sm sm:text-base transition-colors hover:border-paper hover:bg-white/10"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-white/5 text-sm sm:text-base transition-colors hover:border-paper hover:bg-white/10 active:scale-95"
                   >
                     🎬
                   </button>
@@ -870,7 +921,7 @@ export function Messenger({
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
                       placeholder={`Message @${activePartner.username}...`}
-                      className="w-full rounded-full border border-line bg-black/40 px-4 py-2 sm:px-5 sm:py-2.5 text-xs text-paper placeholder:text-mute focus:border-paper focus:outline-none"
+                      className="w-full rounded-full border border-line bg-black/40 px-4 py-2.5 sm:px-5 text-xs sm:text-sm text-paper placeholder:text-mute focus:border-paper focus:outline-none"
                     />
                   </div>
 
@@ -878,9 +929,9 @@ export function Messenger({
                   <button
                     type="submit"
                     disabled={sending || (!inputText.trim() && !selectedTitleSlug)}
-                    className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-paper text-ink transition-transform hover:scale-105 disabled:opacity-40"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-paper text-ink transition-transform hover:scale-105 active:scale-95 disabled:opacity-40"
                   >
-                    <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-current rotate-90" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4 fill-current rotate-90" viewBox="0 0 24 24">
                       <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                     </svg>
                   </button>
